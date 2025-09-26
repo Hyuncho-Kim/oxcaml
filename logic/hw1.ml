@@ -1,104 +1,237 @@
 open! Core
 
 type player_kind =
-  | X
-  | O
+  | Black
+  | White
 
 type cell_position =
   { row : int
   ; column : int
   }
 
+(* A placed disk (position + who owns it) *)
+type disk =
+  { position : cell_position
+  ; owner : player_kind
+  }
+
+(* Game status: still playing, someone won, or no moves remain. *)
 type decision =
   | In_progress of { whose_turn : player_kind }
   | Winner of player_kind
   | Stalemate
 
+(* Whole Board: list of placed disk, 8x8, current status *)
 type game_state =
-  { board : (cell_position * player_kind) list
+  { board : disk list
   ; rows : int
   ; columns : int
-  ; winning_sequence_length : int
   ; decision : decision
   }
 
+(* Choosing a cell to place a disk. *)
 type move = cell_position
 
 (*=
- | |
------
- | |
------
- | |
+Initial board:
+........
+........
+........
+...WB...
+...BW...
+........
+........
+........
+(W = White, B = Black)
 *)
 let initial_state : game_state =
-  { board = []
-  ; rows = 3
-  ; columns = 3
-  ; winning_sequence_length = 3
-  ; decision = In_progress { whose_turn = X }
-  }
-;;
-
-let move_at_0x0 : move = { row = 0; column = 0 }
-
-(*=
-X| |
------
- | |
------
- | |
-*)
-let state_after_move_at_0x0 : game_state =
-  { board = [ move_at_0x0, X ]
-  ; rows = 3
-  ; columns = 3
-  ; winning_sequence_length = 3
-  ; decision = In_progress { whose_turn = O }
+  { board =
+      [ { position = { row = 3; column = 3 }; owner = White }
+      ; { position = { row = 4; column = 4 }; owner = White }
+      ; { position = { row = 3; column = 4 }; owner = Black }
+      ; { position = { row = 4; column = 3 }; owner = Black }
+      ]
+  ; rows = 8
+  ; columns = 8
+  ; decision = In_progress { whose_turn = Black }
   }
 ;;
 
 (*=
- | |X
------
-O|O|X
------
- | |
+1 move from initial board:
+........
+........
+........
+..BBB...
+...BW...
+........
+........
+........
+(W = White, B = Black)
 *)
+let move_at_3x2 : move = { row = 3; column = 2 }
+
+let state_after_move_at_3x2 : game_state =
+  { board =
+      [ { position = { row = 3; column = 2 }; owner = Black } (* new move *)
+      ; { position = { row = 3; column = 3 }; owner = Black } (* flipped *)
+      ; { position = { row = 4; column = 4 }; owner = White }
+      ; { position = { row = 3; column = 4 }; owner = Black }
+      ; { position = { row = 4; column = 3 }; owner = Black }
+      ]
+  ; rows = 8
+  ; columns = 8
+  ; decision = In_progress { whose_turn = White }
+  }
+;;
+
+(* Before terminal *)
 let before_terminal_state : game_state =
   { board =
-      [ { row = 0; column = 2 }, X
-      ; { row = 1; column = 0 }, O
-      ; { row = 1; column = 2 }, X
-      ; { row = 1; column = 1 }, O
+      [ (* White Pieces *)
+        { position = { row = 1; column = 1 }; owner = White }
+      ; { position = { row = 2; column = 0 }; owner = White }
+      ; { position = { row = 2; column = 6 }; owner = White }
+      ; { position = { row = 3; column = 2 }; owner = White }
+      ; { position = { row = 3; column = 3 }; owner = White }
+      ; { position = { row = 3; column = 5 }; owner = White }
+      ; { position = { row = 4; column = 2 }; owner = White }
+      ; { position = { row = 4; column = 4 }; owner = White }
+      ; { position = { row = 5; column = 2 }; owner = White }
+      ; { position = { row = 5; column = 3 }; owner = White }
+      ; { position = { row = 6; column = 2 }; owner = White }
+      ; { position = { row = 6; column = 4 }; owner = White }
+      ; (* Black Pieces *)
+        { position = { row = 0; column = 0 }; owner = Black }
+      ; { position = { row = 0; column = 1 }; owner = Black }
+      ; { position = { row = 0; column = 2 }; owner = Black }
+      ; { position = { row = 0; column = 3 }; owner = Black }
+      ; { position = { row = 0; column = 4 }; owner = Black }
+      ; { position = { row = 0; column = 5 }; owner = Black }
+      ; { position = { row = 0; column = 7 }; owner = Black }
+      ; { position = { row = 1; column = 0 }; owner = Black }
+      ; { position = { row = 1; column = 2 }; owner = Black }
+      ; { position = { row = 1; column = 3 }; owner = Black }
+      ; { position = { row = 1; column = 4 }; owner = Black }
+      ; { position = { row = 1; column = 5 }; owner = Black }
+      ; { position = { row = 1; column = 7 }; owner = Black }
+      ; { position = { row = 2; column = 1 }; owner = Black }
+      ; { position = { row = 2; column = 2 }; owner = Black }
+      ; { position = { row = 2; column = 3 }; owner = Black }
+      ; { position = { row = 2; column = 4 }; owner = Black }
+      ; { position = { row = 2; column = 5 }; owner = Black }
+      ; { position = { row = 2; column = 7 }; owner = Black }
+      ; { position = { row = 3; column = 0 }; owner = Black }
+      ; { position = { row = 3; column = 1 }; owner = Black }
+      ; { position = { row = 3; column = 4 }; owner = Black }
+      ; { position = { row = 3; column = 6 }; owner = Black }
+      ; { position = { row = 3; column = 7 }; owner = Black }
+      ; { position = { row = 4; column = 0 }; owner = Black }
+      ; { position = { row = 4; column = 1 }; owner = Black }
+      ; { position = { row = 4; column = 3 }; owner = Black }
+      ; { position = { row = 4; column = 5 }; owner = Black }
+      ; { position = { row = 4; column = 6 }; owner = Black }
+      ; { position = { row = 4; column = 7 }; owner = Black }
+      ; { position = { row = 5; column = 0 }; owner = Black }
+      ; { position = { row = 5; column = 1 }; owner = Black }
+      ; { position = { row = 5; column = 4 }; owner = Black }
+      ; { position = { row = 5; column = 5 }; owner = Black }
+      ; { position = { row = 5; column = 6 }; owner = Black }
+      ; { position = { row = 5; column = 7 }; owner = Black }
+      ; { position = { row = 6; column = 0 }; owner = Black }
+      ; { position = { row = 6; column = 1 }; owner = Black }
+      ; { position = { row = 6; column = 3 }; owner = Black }
+      ; { position = { row = 6; column = 5 }; owner = Black }
+      ; { position = { row = 6; column = 6 }; owner = Black }
+      ; { position = { row = 6; column = 7 }; owner = Black }
+      ; { position = { row = 7; column = 0 }; owner = Black }
+      ; { position = { row = 7; column = 1 }; owner = Black }
+      ; { position = { row = 7; column = 2 }; owner = Black }
+      ; { position = { row = 7; column = 3 }; owner = Black }
+      ; { position = { row = 7; column = 4 }; owner = Black }
+      ; { position = { row = 7; column = 5 }; owner = Black }
+      ; { position = { row = 7; column = 6 }; owner = Black }
+      ; { position = { row = 7; column = 7 }; owner = Black }
       ]
-  ; rows = 3
-  ; columns = 3
-  ; winning_sequence_length = 3
-  ; decision = In_progress { whose_turn = X }
+  ; rows = 8
+  ; columns = 8
+  ; decision = In_progress { whose_turn = White }
   }
 ;;
 
-let move_to_terminal_state : move = { row = 2; column = 2 }
+let move_to_terminal_state : move = { row = 0; column = 6 }
 
-(*=
- | |X
------
-O|O|X
------
- | |X
-*)
+(* terminal *)
 let terminal_state : game_state =
   { board =
-      [ { row = 0; column = 2 }, X
-      ; { row = 1; column = 0 }, O
-      ; { row = 1; column = 2 }, X
-      ; { row = 1; column = 1 }, O
-      ; { row = 2; column = 2 }, X
+      [ (* White Pieces *)
+        { position = { row = 1; column = 1 }; owner = White }
+      ; { position = { row = 1; column = 2 }; owner = White }
+      ; { position = { row = 1; column = 3 }; owner = White }
+      ; { position = { row = 1; column = 4 }; owner = White }
+      ; { position = { row = 1; column = 5 }; owner = White }
+      ; { position = { row = 1; column = 6 }; owner = White }
+      ; { position = { row = 2; column = 0 }; owner = White }
+      ; { position = { row = 2; column = 5 }; owner = White }
+      ; { position = { row = 2; column = 6 }; owner = White }
+      ; { position = { row = 3; column = 2 }; owner = White }
+      ; { position = { row = 3; column = 3 }; owner = White }
+      ; { position = { row = 3; column = 4 }; owner = White }
+      ; { position = { row = 3; column = 5 }; owner = White }
+      ; { position = { row = 4; column = 2 }; owner = White }
+      ; { position = { row = 4; column = 3 }; owner = White }
+      ; { position = { row = 4; column = 4 }; owner = White }
+      ; { position = { row = 5; column = 2 }; owner = White }
+      ; { position = { row = 5; column = 3 }; owner = White }
+      ; { position = { row = 6; column = 2 }; owner = White }
+      ; { position = { row = 6; column = 4 }; owner = White }
+      ; (* Black Pieces *)
+        { position = { row = 0; column = 0 }; owner = Black }
+      ; { position = { row = 0; column = 1 }; owner = Black }
+      ; { position = { row = 0; column = 2 }; owner = Black }
+      ; { position = { row = 0; column = 3 }; owner = Black }
+      ; { position = { row = 0; column = 4 }; owner = Black }
+      ; { position = { row = 0; column = 5 }; owner = Black }
+      ; { position = { row = 0; column = 7 }; owner = Black }
+      ; { position = { row = 1; column = 0 }; owner = Black }
+      ; { position = { row = 1; column = 7 }; owner = Black }
+      ; { position = { row = 2; column = 1 }; owner = Black }
+      ; { position = { row = 2; column = 2 }; owner = Black }
+      ; { position = { row = 2; column = 3 }; owner = Black }
+      ; { position = { row = 2; column = 4 }; owner = Black }
+      ; { position = { row = 2; column = 7 }; owner = Black }
+      ; { position = { row = 3; column = 0 }; owner = Black }
+      ; { position = { row = 3; column = 1 }; owner = Black }
+      ; { position = { row = 3; column = 6 }; owner = Black }
+      ; { position = { row = 3; column = 7 }; owner = Black }
+      ; { position = { row = 4; column = 0 }; owner = Black }
+      ; { position = { row = 4; column = 1 }; owner = Black }
+      ; { position = { row = 4; column = 5 }; owner = Black }
+      ; { position = { row = 4; column = 6 }; owner = Black }
+      ; { position = { row = 4; column = 7 }; owner = Black }
+      ; { position = { row = 5; column = 0 }; owner = Black }
+      ; { position = { row = 5; column = 1 }; owner = Black }
+      ; { position = { row = 5; column = 4 }; owner = Black }
+      ; { position = { row = 5; column = 5 }; owner = Black }
+      ; { position = { row = 5; column = 6 }; owner = Black }
+      ; { position = { row = 5; column = 7 }; owner = Black }
+      ; { position = { row = 6; column = 0 }; owner = Black }
+      ; { position = { row = 6; column = 1 }; owner = Black }
+      ; { position = { row = 6; column = 3 }; owner = Black }
+      ; { position = { row = 6; column = 5 }; owner = Black }
+      ; { position = { row = 6; column = 6 }; owner = Black }
+      ; { position = { row = 6; column = 7 }; owner = Black }
+      ; { position = { row = 7; column = 0 }; owner = Black }
+      ; { position = { row = 7; column = 1 }; owner = Black }
+      ; { position = { row = 7; column = 2 }; owner = Black }
+      ; { position = { row = 7; column = 3 }; owner = Black }
+      ; { position = { row = 7; column = 4 }; owner = Black }
+      ; { position = { row = 7; column = 5 }; owner = Black }
+      ; { position = { row = 7; column = 6 }; owner = Black }
+      ; { position = { row = 7; column = 7 }; owner = Black }
       ]
-  ; rows = 3
-  ; columns = 3
-  ; winning_sequence_length = 3
-  ; decision = Winner X
+  ; rows = 8
+  ; columns = 8
+  ; decision = Winner Black
   }
 ;;
