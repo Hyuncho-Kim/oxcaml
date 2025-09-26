@@ -4,7 +4,7 @@ module Player_kind = struct
   type t =
     | Black
     | White
-  [@@deriving sexp, compare, equal, Hash]
+  [@@deriving sexp, compare, equal, hash]
 
   (* It's clearer to use type inference and just write:
      [let opposite t =]
@@ -30,8 +30,6 @@ module Cell_position = struct
   end
 
   include T
-
-  (* Creates a [Cell_position.Map.t]. *)
   include Comparable.Make (T)
 end
 
@@ -65,7 +63,7 @@ module Game_state = struct
 
   let create ~rows ~columns : (t, Create_error.t) Result.t =
     if rows % 2 <> 0 || columns % 2 <> 0 || rows < 4 || columns < 4
-    then Error Create_error.Board_must_be_even_and_at_least_4x4
+    then Error Board_must_be_even_and_at_least_4x4
     else (
       let center_r1 = rows / 2 - 1 in
       let center_c1 = columns / 2 - 1 in
@@ -88,8 +86,8 @@ module Game_state = struct
         })
   ;;
 
-  let is_on_board t { row; column } =
-    row >= 0 && row < t.rows && column >= 0 && column < t.columns
+  let is_on_board t (pos : Cell_position.t) =
+    pos.row >= 0 && pos.row < t.rows && pos.column >= 0 && pos.column < t.columns
   ;;
 
   let deltas = List.init 3 ~f:(fun i -> i - 1)
@@ -103,8 +101,10 @@ module Game_state = struct
      return the accumulated list (these are the pieces to flip). Otherwise, return None. *)
   let pieces_to_flip_in_direction t (start_pos : Move.t) player (dr, dc) =
     let opponent = Player_kind.opposite player in
-    let rec walk current_pos pieces_in_between =
-      let next_pos = { row = current_pos.row + dr; column = current_pos.column + dc } in
+    let rec walk (current_pos : Cell_position.t) pieces_in_between =
+      let next_pos : Cell_position.t =
+        { row = current_pos.row + dr; column = current_pos.column + dc }
+      in
       if not (is_on_board t next_pos)
       then None (* Hit the edge of the board *)
       else (
@@ -154,7 +154,6 @@ module Game_state = struct
   module Move_error = struct
     type t =
       | Game_is_over
-      | Not_your_turn
       | Invalid_move
     [@@deriving sexp, compare]
   end
@@ -181,12 +180,12 @@ module Game_state = struct
         
         let decision =
           if next_player_has_moves
-          then In_progress { whose_turn = next_player }
+          then Decision.In_progress { whose_turn = next_player }
           else (
             (* Next player must pass; check if the current player can go again *)
             let current_player_has_moves = not (List.is_empty (get_all_legal_moves t_after_move whose_turn)) in
             if current_player_has_moves
-            then In_progress { whose_turn } (* Turn skips back to current player *)
+            then Decision.In_progress { whose_turn } (* Turn skips back to current player *)
             else (
               (* Neither player can move, so the game is over *)
               let black_score, white_score = scores t_after_move in

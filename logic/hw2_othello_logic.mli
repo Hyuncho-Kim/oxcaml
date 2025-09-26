@@ -4,7 +4,7 @@ module Player_kind : sig
   type t =
     | Black
     | White
-  [@@deriving sexp, compare, equal, Hash]
+  [@@deriving sexp, compare, equal, hash]
 
   val opposite : t -> t
   val to_string : t -> string
@@ -51,10 +51,8 @@ module Game_state : sig
     type t = Board_must_be_even_and_at_least_4x4 [@@deriving sexp, compare]
   end
 
-  val create
-    :  rows:int
-    -> columns:int
-    -> (t, Create_error.t list) Result.t
+  val create : rows:int -> columns:int -> (t, Create_error.t) Result.t
+
 
   module Move_error : sig
     type t =
