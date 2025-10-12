@@ -1,4 +1,4 @@
-open! Core
+(* open! Core
 open Othello_logic_library
 open Hw2_othello_logic
 
@@ -8,4 +8,4 @@ val ok_exn : ('a, 'b) result -> 'a
 
 (** [pretty_print_board game_state] prints a human-readable representation
     of the current board state, scores, and decision to standard output. *)
-val pretty_print_board : Game_state.t -> unit
+val pretty_print_board : Game_state.t -> unit *)

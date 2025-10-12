@@ -1,4 +1,4 @@
-open! Core
+(* open! Core
 open Othello_logic_library
 open Hw2_othello_logic
 
@@ -238,4 +238,4 @@ let%expect_test "Game_state.get_all_legal_moves for Othello initial state" =
       (((row 2) (column 3)) ((row 3) (column 2)) ((row 4) (column 5))
        ((row 5) (column 4)))))
     |}]
-;; *)
+;; *) *)

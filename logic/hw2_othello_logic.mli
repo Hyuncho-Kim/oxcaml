@@ -1,3 +1,5 @@
+(* hw2_othello_logic.mli *)
+
 open! Core
 
 module Player_kind : sig
@@ -64,6 +66,8 @@ module Game_state : sig
   (** [get_all_legal_moves t player] returns a list of all valid moves the
       specified [player] can make in the current game state [t]. *)
   val get_all_legal_moves : t -> Player_kind.t -> Move.t list
+
+  val is_on_board : t -> Cell_position.t -> bool
 
   (** [make_move t move] attempts to apply a [move] for the current player.
       If the move is legal, it returns an updated game state.

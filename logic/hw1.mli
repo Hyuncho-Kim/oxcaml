@@ -1,3 +1,4 @@
+(* hw1.mli *)
 open! Core
 
 type player_kind =

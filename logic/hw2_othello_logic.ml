@@ -1,5 +1,5 @@
 open! Core
-
+(* hw2_othello_logic.ml *)
 module Player_kind = struct
   type t =
     | Black
@@ -128,12 +128,17 @@ module Game_state = struct
   ;;
 
   let is_legal_move t move player =
-    match Map.find t.board move with
+    (* First check if the move is on the board *)
+    if not (is_on_board t move)
+    then false
+    else (
+      match Map.find t.board move with
     | Some _ -> false (* Space is already filled *)
     | None ->
       (match get_pieces_to_flip t move player with
        | [] -> false (* Move does not flip any pieces *)
-       | _ -> true)
+       | _ -> true))
+    
   ;;
 
   let get_all_legal_moves t player : Move.t list =
@@ -204,3 +209,169 @@ module Game_state = struct
     let get_pieces_to_flip = get_pieces_to_flip
   end
 end
+
+
+
+
+
+(* testing hw2*)
+(* let%test_module "Othello Tests" = (module struct
+  open Game_state
+
+  let%test "create valid 8x8 board" =
+    match create ~rows:8 ~columns:8 with
+    | Ok _ -> true
+    | Error _ -> false
+  ;;
+
+  let%test "reject odd dimensions" =
+    match create ~rows:7 ~columns:8 with
+    | Ok _ -> false
+    | Error Board_must_be_even_and_at_least_4x4 -> true
+  ;;
+
+  let%test "reject too small board" =
+    match create ~rows:2 ~columns:2 with
+    | Ok _ -> false
+    | Error Board_must_be_even_and_at_least_4x4 -> true
+  ;;
+
+  let%test "initial score is 2-2" =
+    match create ~rows:8 ~columns:8 with
+    | Ok game ->
+      let black, white = scores game in
+      black = 2 && white = 2
+    | Error _ -> false
+  ;;
+
+  let%test "Black goes first" =
+    match create ~rows:8 ~columns:8 with
+    | Ok game ->
+      (match game.decision with
+      | Decision.In_progress { whose_turn = Player_kind.Black } -> true
+      | _ -> false)
+    | Error _ -> false
+  ;;
+
+  let%test "initial legal moves for Black" =
+    match create ~rows:8 ~columns:8 with
+    | Ok game ->
+      let moves = get_all_legal_moves game Player_kind.Black in
+      List.length moves = 4
+    | Error _ -> false
+  ;;
+
+  let%test "legal move is accepted" =
+    match create ~rows:8 ~columns:8 with
+    | Ok game ->
+      let move = { Cell_position.row = 2; column = 3 } in
+      (match make_move game move with
+      | Ok _ -> true
+      | Error _ -> false)
+    | Error _ -> false
+  ;;
+
+  let%test "move flips correct number of pieces" =
+    match create ~rows:8 ~columns:8 with
+    | Ok game ->
+      let move = { Cell_position.row = 2; column = 3 } in
+      (match make_move game move with
+      | Ok new_game ->
+        let black, white = scores new_game in
+        black = 4 && white = 1
+      | Error _ -> false)
+    | Error _ -> false
+  ;;
+
+  let%test "turn switches after move" =
+    match create ~rows:8 ~columns:8 with
+    | Ok game ->
+      let move = { Cell_position.row = 2; column = 3 } in
+      (match make_move game move with
+      | Ok new_game ->
+        (match new_game.decision with
+        | Decision.In_progress { whose_turn = Player_kind.White } -> true
+        | _ -> false)
+      | Error _ -> false)
+    | Error _ -> false
+  ;;
+
+  let%test "invalid move on occupied square is rejected" =
+    match create ~rows:8 ~columns:8 with
+    | Ok game ->
+      let move = { Cell_position.row = 2; column = 3 } in
+      (match make_move game move with
+      | Ok new_game ->
+        (* Try to place on the same square again *)
+        (match make_move new_game move with
+        | Ok _ -> false
+        | Error Invalid_move -> true
+        | Error Game_is_over -> false)
+      | Error _ -> false)
+    | Error _ -> false
+  ;;
+
+  let%test "move off board is rejected" =
+    match create ~rows:8 ~columns:8 with
+    | Ok game ->
+      let move = { Cell_position.row = 10; column = 10 } in
+      (match make_move game move with
+      | Ok _ -> false
+      | Error Invalid_move -> true
+      | Error Game_is_over -> false)
+    | Error _ -> false
+  ;;
+
+  let%test "move that doesn't flip pieces is rejected" =
+    match create ~rows:8 ~columns:8 with
+    | Ok game ->
+      let move = { Cell_position.row = 0; column = 0 } in
+      (match make_move game move with
+      | Ok _ -> false
+      | Error Invalid_move -> true
+      | Error Game_is_over -> false)
+    | Error _ -> false
+  ;;
+
+  let%test "pieces_to_flip finds correct pieces" =
+    match create ~rows:8 ~columns:8 with
+    | Ok game ->
+      let move = { Cell_position.row = 2; column = 3 } in
+      let pieces = For_testing.get_pieces_to_flip game move Player_kind.Black in
+      List.length pieces = 1
+      && (match List.hd pieces with
+          | Some pos -> pos.row = 3 && pos.column = 3
+          | None -> false)
+    | Error _ -> false
+  ;;
+
+  let%test "all_directions has 8 directions" =
+    List.length For_testing.all_directions = 8
+  ;;
+
+  let%test "sequence of moves works" =
+    match create ~rows:8 ~columns:8 with
+    | Ok game ->
+      let move1 = { Cell_position.row = 2; column = 3 } in
+      (match make_move game move1 with
+      | Ok game2 ->
+        let move2 = { Cell_position.row = 2; column = 2 } in
+        (match make_move game2 move2 with
+        | Ok game3 ->
+          let black, white = scores game3 in
+          black = 3 && white = 3
+        | Error _ -> false)
+      | Error _ -> false)
+    | Error _ -> false
+  ;;
+
+  let%test "is_on_board works correctly" =
+    match create ~rows:8 ~columns:8 with
+    | Ok game ->
+      is_on_board game { Cell_position.row = 0; column = 0 }
+      && is_on_board game { Cell_position.row = 7; column = 7 }
+      && not (is_on_board game { Cell_position.row = 8; column = 0 })
+      && not (is_on_board game { Cell_position.row = -1; column = 0 })
+    | Error _ -> false
+  ;;
+end) *)
