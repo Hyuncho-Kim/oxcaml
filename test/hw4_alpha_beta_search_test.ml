@@ -1,332 +1,230 @@
-(* open! Core
-open Tictactoe_logic_library
-open Hw2_tictactoe_logic
+(* hw4_alpha_beta_search_test.ml
+ * Location: test/hw4_alpha_beta_search_test.ml
+ *
+ * Tests for the Othello AI using alpha-beta pruning.
+ *)
+
+open! Core
+open Othello_logic_library
+open Hw2_othello_logic
 open Hw4_alpha_beta_search
-open Hw3_tictactoe_logic_test
+open Hw3_othello_logic_test
 
-type player_kind_or_empty =
-  | E
-  | O
-  | X
+(* Helper to create a custom board state for testing *)
+let create_test_board pieces ~whose_turn =
+  let board = Cell_position.Map.of_alist_exn pieces in
+  { Game_state.board
+  ; rows = 8
+  ; columns = 8
+  ; decision = Decision.In_progress { whose_turn }
+  ; last_move = None
+  }
+;;
 
-let print_computer_move (board_as_lists : player_kind_or_empty list list) max_depth =
-  let board : Player_kind.t Cell_position.Map.t =
-    List.mapi board_as_lists ~f:(fun row row_as_list ->
-      List.filter_mapi row_as_list ~f:(fun col player_kind_or_empty ->
-        let player_kind : Player_kind.t option =
-          match player_kind_or_empty with
-          | E -> None
-          | O -> Some O
-          | X -> Some X
+(* Helper to print AI's chosen move and resulting board *)
+let print_computer_move state depth =
+  match alpha_beta state ~depth with
+  | None -> print_endline "No move available"
+  | Some move ->
+    let next_state = Game_state.make_move state move |> ok_exn in
+    print_s [%message "Computer chooses this move" (move : Move.t)];
+    print_endline "\nThis transitions the game from this state:";
+    pretty_print_board state;
+    print_endline "\nTo this state:";
+    pretty_print_board next_state
+;;
+
+(* ================= BASIC AI FUNCTIONALITY TESTS ================= *)
+
+let%expect_test "AI finds a move from initial position" =
+  let state = Game_state.create ~rows:8 ~columns:8 |> ok_exn in
+  print_computer_move state 3;
+  [%expect {| |}]
+;;
+
+let%expect_test "AI makes legal moves" =
+  let state = Game_state.create ~rows:8 ~columns:8 |> ok_exn in
+  match alpha_beta state ~depth:2 with
+  | None -> print_endline "FAIL: No move found"
+  | Some move ->
+    (match Game_state.make_move state move with
+    | Ok _ -> printf "✓ AI made legal move at (%d, %d)\n" move.row move.column
+    | Error _ -> print_endline "FAIL: AI returned illegal move")
+  ;
+  [%expect {| |}]
+;;
+
+(* ================= STRATEGIC TESTS ================= *)
+
+let%expect_test "AI prefers corner when available" =
+  (* Create position where corner (0,0) is capturable *)
+  let state = create_test_board
+    [ { row = 0; column = 1 }, Player_kind.Black
+    ; { row = 0; column = 2 }, Player_kind.Black
+    ; { row = 1; column = 0 }, Player_kind.White
+    ; { row = 1; column = 1 }, Player_kind.White
+    ; { row = 2; column = 0 }, Player_kind.White
+    ]
+    ~whose_turn:Black
+  in
+  print_computer_move state 3;
+  [%expect {| |}]
+;;
+
+(* ================= RANDOM AI TESTS ================= *)
+
+let%test "Random AI returns legal move" =
+  Random.init 42;
+  let state = Game_state.create ~rows:8 ~columns:8 |> ok_exn in
+  match random_move state with
+  | None -> false
+  | Some move ->
+    (match Game_state.make_move state move with
+    | Ok _ -> true
+    | Error _ -> false)
+;;
+
+let%test "Random AI returns None when game is over" =
+  let state = create_test_board [] ~whose_turn:Black in
+  let state_over = { state with decision = Decision.Game_over { winner = Some Black } } in
+  Option.is_none (random_move state_over)
+;;
+
+(* ================= AI VS AI BATTLE ================= *)
+
+(* Play one complete game between two AIs *)
+let play_ai_vs_ai ~black_ai ~white_ai =
+  let rec play state moves_count =
+    if moves_count > 100 then state (* Safety limit *)
+    else
+      let { Game_state.decision; _ } = state in
+      match decision with
+      | Decision.Game_over _ -> state
+      | Decision.In_progress { whose_turn } ->
+        let move_opt =
+          match whose_turn with
+          | Black -> black_ai state
+          | White -> white_ai state
         in
-        Option.map player_kind ~f:(fun player_kind : (Cell_position.t * Player_kind.t) ->
-          { row; column = col }, player_kind)))
-    |> List.concat
-    |> Cell_position.Map.of_alist_exn
+        (match move_opt with
+        | None -> state
+        | Some move ->
+          (match Game_state.make_move state move with
+          | Ok next_state -> play next_state (moves_count + 1)
+          | Error _ -> state))
   in
-  let whose_turn : Player_kind.t = if Map.length board mod 2 = 0 then X else O in
-  let state : Game_state.t =
-    { board
-    ; rows = 3
-    ; columns = 3
-    ; winning_sequence_length = 3
-    ; decision = In_progress { whose_turn }
-    ; last_move = None
-    }
+  let initial = Game_state.create ~rows:8 ~columns:8 |> ok_exn in
+  play initial 0
+;;
+
+let%test "Alpha-beta can complete a game" =
+  Random.init 123;
+  let ai = fun state -> alpha_beta state ~depth:2 in
+  let final_state = play_ai_vs_ai ~black_ai:ai ~white_ai:ai in
+  let { Game_state.decision; _ } = final_state in
+  Decision.is_game_over decision
+;;
+
+let%expect_test "Random vs Alpha-beta game" =
+  Random.init 456;
+  let random_ai = random_move in
+  let smart_ai = fun state -> alpha_beta state ~depth:2 in (*depth:3*)
+  let final_state = play_ai_vs_ai ~black_ai:smart_ai ~white_ai:random_ai in
+  pretty_print_board final_state;
+  [%expect {| |}]
+;;
+
+(* ================= HEURISTIC TESTS ================= *)
+
+let%test "Heuristic values winning position highly" =
+  let state = create_test_board [] ~whose_turn:Black in
+  let winning_state = { state with decision = Decision.Game_over { winner = Some Black } } in
+  let score = heuristic_value winning_state in
+  score = Int.max_value
+;;
+
+let%test "Heuristic values losing position poorly" =
+  let state = create_test_board [] ~whose_turn:Black in
+  let losing_state = { state with decision = Decision.Game_over { winner = Some White } } in
+  let score = heuristic_value losing_state in
+  score = Int.min_value
+;;
+
+let%test "Heuristic prefers more pieces for Black" =
+  let state1 = create_test_board
+    [ { row = 3; column = 3 }, Player_kind.Black
+    ; { row = 3; column = 4 }, Player_kind.White
+    ]
+    ~whose_turn:Black
   in
-  let move = alpha_beta state ~depth:max_depth |> Option.value_exn in
-  let next_state = Game_state.make_move state move |> ok_exn in
-  print_s [%message "Computer chooses this move" (move : Move.t)];
-  print_endline "\nThis transitions the game from this state:";
-  pretty_print_board state;
-  print_endline "\nTo this state:";
-  pretty_print_board next_state
+  let state2 = create_test_board
+    [ { row = 3; column = 3 }, Player_kind.Black
+    ; { row = 3; column = 4 }, Player_kind.Black
+    ; { row = 4; column = 4 }, Player_kind.White
+    ]
+    ~whose_turn:Black
+  in
+  heuristic_value state2 > heuristic_value state1
 ;;
 
-let%expect_test "returns exactly one cell" =
-  print_computer_move [ [ O; O; X ]; [ X; X; O ]; [ O; X; E ] ] 1;
-  [%expect
-    {|
-    ("Computer chooses this move" (move ((row 2) (column 2))))
+(* ================= DEPTH TESTS ================= *)
 
-    This transitions the game from this state:
-    O|O|X
-    -----
-    X|X|O
-    -----
-    O|X|
-    (In_progress (whose_turn X))
-
-    To this state:
-    O|O|X
-    -----
-    X|X|O
-    -----
-    O|X|X
-    Stalemate
-    |}]
+let%test "AI finds moves at various depths" =
+  let state = Game_state.create ~rows:8 ~columns:8 |> ok_exn in
+  List.for_all (List.range 1 5) ~f:(fun depth ->
+    Option.is_some (alpha_beta state ~depth))
 ;;
 
-let%expect_test "X finds an immediate winning move" =
-  print_computer_move [ [ E; E; O ]; [ O; X; X ]; [ E; X; O ] ] 1;
-  [%expect
-    {|
-    ("Computer chooses this move" (move ((row 0) (column 1))))
-
-    This transitions the game from this state:
-     | |O
-    -----
-    O|X|X
-    -----
-     |X|O
-    (In_progress (whose_turn X))
-
-    To this state:
-     |X|O
-    -----
-    O|X|X
-    -----
-     |X|O
-    (Winner X)
-    |}]
+let%test_unit "Higher depth doesn't crash" =
+  let state = Game_state.create ~rows:8 ~columns:8 |> ok_exn in
+  (* Test depths 1-5 *)
+  for depth = 1 to 5 do
+    match alpha_beta state ~depth with
+    | None -> failwith "AI should find a move"
+    | Some move ->
+      match Game_state.make_move state move with
+      | Ok _ -> ()
+      | Error _ -> failwithf "Illegal move at depth %d" depth ()
+  done
 ;;
 
-let%expect_test "O finds an immediate winning move" =
-  print_computer_move [ [ E; E; O ]; [ O; X; X ]; [ O; X; O ] ] 1;
-  [%expect
-    {|
-    ("Computer chooses this move" (move ((row 0) (column 0))))
+(* ================= WIN RATE TESTS ================= *)
 
-    This transitions the game from this state:
-     | |O
-    -----
-    O|X|X
-    -----
-    O|X|O
-    (In_progress (whose_turn O))
-
-    To this state:
-    O| |O
-    -----
-    O|X|X
-    -----
-    O|X|O
-    (Winner O)
-    |}]
+let%expect_test "Alpha-beta vs Random: 1000 games" =
+  let wins = ref 0 in
+  let losses = ref 0 in
+  let draws = ref 0 in
+  
+  for seed = 0 to 999 do
+    Random.init seed;
+    let smart_ai = fun state -> alpha_beta state ~depth:2 in (*depth:3*)
+    let random_ai = random_move in
+    (* Alternate who goes first *)
+    let black_ai, white_ai =
+      if seed mod 2 = 0 
+      then smart_ai, random_ai 
+      else random_ai, smart_ai
+    in
+    let final_state = play_ai_vs_ai ~black_ai ~white_ai in
+    let { Game_state.decision; _ } = final_state in
+    match decision with
+    | Decision.Game_over { winner = Some Black } ->
+      if seed mod 2 = 0 then incr wins else incr losses
+    | Decision.Game_over { winner = Some White } ->
+      if seed mod 2 = 0 then incr losses else incr wins
+    | Decision.Game_over { winner = None } -> incr draws
+    | _ -> ()
+  done;
+  
+  printf "========================================\n";
+  printf "  1000 GAMES: Alpha-beta vs Random\n";
+  printf "========================================\n";
+  printf "Alpha-beta Wins: %d\n" !wins;
+  printf "Random Wins: %d\n" !losses;
+  printf "Draws: %d\n" !draws;
+  printf "Alpha-beta Win Rate: %.1f%%\n" (float_of_int !wins /. 1000.0 *. 100.0);
+  printf "========================================\n";
+  [%expect {| |}]
 ;;
 
-let%expect_test "X prevents an immediate win" =
-  print_computer_move [ [ X; E; E ]; [ O; O; E ]; [ X; E; E ] ] 2;
-  [%expect
-    {|
-    ("Computer chooses this move" (move ((row 1) (column 2))))
-
-    This transitions the game from this state:
-    X| |
-    -----
-    O|O|
-    -----
-    X| |
-    (In_progress (whose_turn X))
-
-    To this state:
-    X| |
-    -----
-    O|O|X
-    -----
-    X| |
-    (In_progress (whose_turn O))
-    |}]
-;;
-
-let%expect_test "O prevents an immediate win" =
-  print_computer_move [ [ X; X; E ]; [ O; E; E ]; [ E; E; E ] ] 2;
-  [%expect
-    {|
-    ("Computer chooses this move" (move ((row 0) (column 2))))
-
-    This transitions the game from this state:
-    X|X|
-    -----
-    O| |
-    -----
-     | |
-    (In_progress (whose_turn O))
-
-    To this state:
-    X|X|O
-    -----
-    O| |
-    -----
-     | |
-    (In_progress (whose_turn X))
-    |}]
-;;
-
-let%expect_test "O prevents another immediate win" =
-  print_computer_move [ [ X; O; E ]; [ X; O; E ]; [ E; X; E ] ] 2;
-  [%expect
-    {|
-    ("Computer chooses this move" (move ((row 2) (column 0))))
-
-    This transitions the game from this state:
-    X|O|
-    -----
-    X|O|
-    -----
-     |X|
-    (In_progress (whose_turn O))
-
-    To this state:
-    X|O|
-    -----
-    X|O|
-    -----
-    O|X|
-    (In_progress (whose_turn X))
-    |}]
-;;
-
-let%expect_test "X finds a winning move that will lead to winning in 2 steps" =
-  print_computer_move [ [ X; E; E ]; [ O; X; E ]; [ E; E; O ] ] 3;
-  [%expect
-    {|
-    ("Computer chooses this move" (move ((row 0) (column 1))))
-
-    This transitions the game from this state:
-    X| |
-    -----
-    O|X|
-    -----
-     | |O
-    (In_progress (whose_turn X))
-
-    To this state:
-    X|X|
-    -----
-    O|X|
-    -----
-     | |O
-    (In_progress (whose_turn O))
-    |}]
-;;
-
-let%expect_test "O finds a winning move that will lead to winning in 2 steps" =
-  print_computer_move [ [ E; X; E ]; [ X; X; O ]; [ E; O; E ] ] 3;
-  [%expect
-    {|
-    ("Computer chooses this move" (move ((row 2) (column 2))))
-
-    This transitions the game from this state:
-     |X|
-    -----
-    X|X|O
-    -----
-     |O|
-    (In_progress (whose_turn O))
-
-    To this state:
-     |X|
-    -----
-    X|X|O
-    -----
-     |O|O
-    (In_progress (whose_turn X))
-    |}]
-;;
-
-let%expect_test "O finds a cool winning move that will lead to winning in 2 steps" =
-  print_computer_move [ [ X; O; X ]; [ X; E; E ]; [ O; E; E ] ] 3;
-  [%expect
-    {|
-    ("Computer chooses this move" (move ((row 2) (column 1))))
-
-    This transitions the game from this state:
-    X|O|X
-    -----
-    X| |
-    -----
-    O| |
-    (In_progress (whose_turn O))
-
-    To this state:
-    X|O|X
-    -----
-    X| |
-    -----
-    O|O|
-    (In_progress (whose_turn X))
-    |}]
-;;
-
-let%expect_test "O finds the wrong move due to small depth" =
-  print_computer_move [ [ X; E; E ]; [ E; E; E ]; [ E; E; E ] ] 3;
-  [%expect
-    {|
-    ("Computer chooses this move" (move ((row 0) (column 1))))
-
-    This transitions the game from this state:
-    X| |
-    -----
-     | |
-    -----
-     | |
-    (In_progress (whose_turn O))
-
-    To this state:
-    X|O|
-    -----
-     | |
-    -----
-     | |
-    (In_progress (whose_turn X))
-    |}]
-;;
-
-let%expect_test "O finds the correct move when depth is big enough" =
-  print_computer_move [ [ X; E; E ]; [ E; E; E ]; [ E; E; E ] ] 6;
-  [%expect
-    {|
-    ("Computer chooses this move" (move ((row 1) (column 1))))
-
-    This transitions the game from this state:
-    X| |
-    -----
-     | |
-    -----
-     | |
-    (In_progress (whose_turn O))
-
-    To this state:
-    X| |
-    -----
-     |O|
-    -----
-     | |
-    (In_progress (whose_turn X))
-    |}]
-;;
-
-let%expect_test "X finds a winning move that will lead to winning in 2 steps" =
-  print_computer_move [ [ E; E; E ]; [ O; X; E ]; [ E; E; E ] ] 5;
-  [%expect
-    {|
-    ("Computer chooses this move" (move ((row 0) (column 0))))
-
-    This transitions the game from this state:
-     | |
-    -----
-    O|X|
-    -----
-     | |
-    (In_progress (whose_turn X))
-
-    To this state:
-    X| |
-    -----
-    O|X|
-    -----
-     | |
-    (In_progress (whose_turn O))
-    |}]
-;; *)
+printf "\n✓ All alpha-beta tests completed\n"
