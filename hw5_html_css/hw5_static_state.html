@@ -1,70 +1,303 @@
 <!DOCTYPE html>
-<html ng-app="myApp">
+<html>
 
 <head>
     <meta charset="utf-8">
-    <title>TicTacToe</title>
-    <meta name="description" content="TicTacToe game">
+    <title>Othello Game States</title>
+    <meta name="description" content="Othello game state transitions">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <link rel="stylesheet" type="text/css" href="hw5_static_state.css">
     <link rel="icon" href="data:,">
 </head>
 
 <body>
-    <div class="game">
-        <!-- First row: ['X', 'O', ''] -->
-        <div style="top:0; height: 33%;" class="row">
-            <div style="left:0%; width: 33%;" class="column border_right border_bottom">
-                <div class="max_size">
-                    <svg viewbox="0 0 100 100">
-                        <line x1="25" y1="25" x2="75" y2="75" stroke="red" stroke-width="5" />
-                        <line x1="25" y1="75" x2="75" y2="25" stroke="red" stroke-width="5" />
-                    </svg>
+    <div class="container">
+        <!-- state 1: before terminal state -->
+        <div class="state-section">
+            <div class="state-label">Before Terminal State</div>
+            <div class="game">
+                <!-- row 0 -->
+                <div style="top:0%; height: 12.5%;" class="row">
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                </div>
+                <!-- row 1 -->
+                <div style="top:12.5%; height: 12.5%;" class="row">
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                </div>
+                <!-- row 2 -->
+                <div style="top:25%; height: 12.5%;" class="row">
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                </div>
+                <!-- row 3 -->
+                <div style="top:37.5%; height: 12.5%;" class="row">
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                </div>
+                <!-- row 4 -->
+                <div style="top:50%; height: 12.5%;" class="row">
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                </div>
+                <!-- row 5 -->
+                <div style="top:62.5%; height: 12.5%;" class="row">
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                </div>
+                <!-- row 6 -->
+                <div style="top:75%; height: 12.5%;" class="row">
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                </div>
+                <!-- row 7 -->
+                <div style="top:87.5%; height: 12.5%;" class="row">
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
                 </div>
             </div>
-            <div style="left:33%; width: 33%;" class="column border_right border_bottom">
-                <div class="max_size slowly_appear">
-                    <svg viewbox="0 0 100 100">
-                        <circle cx="50" cy="50" r="27" stroke="blue" stroke-width="5" fill="white" />
-                    </svg>
-                </div>
-            </div>
-            <div style="left:66%; width: 33%;" class="column border_bottom">
-                <div class="max_size">
-                </div>
-            </div>
+            <div class="score">Black: 51 | White: 12</div>
         </div>
 
-        <!-- Second row: ['', '', ''] -->
-        <div style="top:33%; height: 33%;" class="row">
-            <div style="left:0%; width: 33%;" class="column border_right border_bottom">
-                <div class="max_size">
+        <!-- state 2: move (1,6) highlighted - showing before state + new white disk -->
+        <div class="state-section">
+            <div class="state-label">Move: White plays at (1,6)</div>
+            <div class="game">
+                <!-- row 0 -->
+                <div style="top:0%; height: 12.5%;" class="row">
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                </div>
+                <!-- row 1 -->
+                <div style="top:12.5%; height: 12.5%;" class="row">
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell highlight"><div class="disk white slowly_appear"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                </div>
+                <!-- row 2 -->
+                <div style="top:25%; height: 12.5%;" class="row">
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                </div>
+                <!-- row 3 -->
+                <div style="top:37.5%; height: 12.5%;" class="row">
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                </div>
+                <!-- row 4 -->
+                <div style="top:50%; height: 12.5%;" class="row">
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                </div>
+                <!-- row 5 -->
+                <div style="top:62.5%; height: 12.5%;" class="row">
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                </div>
+                <!-- row 6 -->
+                <div style="top:75%; height: 12.5%;" class="row">
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                </div>
+                <!-- row 7 -->
+                <div style="top:87.5%; height: 12.5%;" class="row">
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
                 </div>
             </div>
-            <div style="left:33%; width: 33%;" class="column border_right border_bottom">
-                <div class="max_size">
-                </div>
-            </div>
-            <div style="left:66%; width: 33%;" class="column border_bottom">
-                <div class="max_size">
-                </div>
-            </div>
+            <div class="score">White places at (1,6)...</div>
         </div>
 
-        <!-- Third row: ['', '', ''] -->
-        <div style="top:66%; height: 33%;" class="row">
-            <div style="left:0%; width: 33%;" class="column border_right">
-                <div class="max_size">
+        <!-- state 3: terminal State -->
+        <div class="state-section">
+            <div class="state-label">Terminal State - Black Wins!</div>
+            <div class="game">
+                <!-- row 0 -->
+                <div style="top:0%; height: 12.5%;" class="row">
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                </div>
+                <!-- row 1 -->
+                <div style="top:12.5%; height: 12.5%;" class="row">
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                </div>
+                <!-- row 2 -->
+                <div style="top:25%; height: 12.5%;" class="row">
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                </div>
+                <!-- row 3 -->
+                <div style="top:37.5%; height: 12.5%;" class="row">
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                </div>
+                <!-- row 4 -->
+                <div style="top:50%; height: 12.5%;" class="row">
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                </div>
+                <!-- row 5 -->
+                <div style="top:62.5%; height: 12.5%;" class="row">
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                </div>
+                <!-- row 6 -->
+                <div style="top:75%; height: 12.5%;" class="row">
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk white"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                </div>
+                <!-- row 7 -->
+                <div style="top:87.5%; height: 12.5%;" class="row">
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
+                    <div class="cell"><div class="disk black"></div></div>
                 </div>
             </div>
-            <div style="left:33%; width: 33%;" class="column border_right">
-                <div class="max_size">
-                </div>
-            </div>
-            <div style="left:66%; width: 33%;" class="column">
-                <div class="max_size">
-                </div>
-            </div>
+            <div class="score">Black: 44 | White: 20 - Winner: Black!</div>
         </div>
     </div>
 </body>

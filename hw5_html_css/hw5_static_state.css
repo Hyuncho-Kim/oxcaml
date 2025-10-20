@@ -11,34 +11,56 @@ The flexbox approach is probably more widely supported,
 while the Grid approach with place-items: center is more concise.
 */
 body {
-  background-color: rgb(250, 250, 250);
+  background-color: rgb(34, 139, 34);
   margin: 0;
   padding: 0;
   width: 100vw;
   height: 100vh;
-  overflow: hidden;
-  position: fixed !important;
+  overflow: auto;
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
-}
-/*
-min(100vw, 100vh) ensures the square fits within both screen dimensions.
-If your game isn't square, you can change the aspect ratio, see [aspect-ratio: 1].
-We give it [position: relative] so that the inside elements can be [position:absolute].
-*/
-.game {
-  width: min(100vw, 100vh);
-  height: min(100vw, 100vh);
-  aspect-ratio: 1;
-  position: relative;
+  font-family: Arial, sans-serif;
 }
 
-/* To prevent long-press that will bring up copy-paste dialog.
-user-select: none prevents text selection
--webkit-touch-callout: none specifically prevents the iOS long-press callout
--webkit-tap-highlight-color: transparent removes tap highlights on mobile
-*/
+/* Container for all three states */
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 2vh;
+  padding: 2vh;
+  max-width: 95vw;
+}
+
+/* Each state section */
+.state-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1vh;
+}
+
+.state-label {
+  font-size: 2.5vh;
+  font-weight: bold;
+  color: white;
+  text-align: center;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+/* game board container */
+.game {
+  width: min(90vw, 50vh);
+  height: min(90vw, 50vh);
+  aspect-ratio: 1;
+  position: relative;
+  background-color: rgb(34, 139, 34);
+  border: min(0.5vw, 0.5vh) solid rgb(101, 67, 33);
+  box-shadow: 0 0 min(2vw, 2vh) rgba(0, 0, 0, 0.5);
+}
+
+/* To prevent long-press that will bring up copy-paste dialog */
 * {
   -webkit-user-select: none;
   -moz-user-select: none;
@@ -48,66 +70,100 @@ user-select: none prevents text selection
   -webkit-tap-highlight-color: transparent;
   -moz-touch-callout: none;
   -ms-touch-callout: none;
-  outline: 0; /* To prevent blue-box outline after click: http://stackoverflow.com/questions/21719306/getting-rid-of-a-blue-box-around-button-when-pressed */
-}
-textarea,
-input {
-  -webkit-user-select: text !important;
-  -moz-user-select: text !important;
-  -ms-user-select: text !important;
-  user-select: text !important;
+  outline: 0;
 }
 
-/* For tictactoe, to make a right/bottom border.
-E.g., to make:
-
-X| |
------
- | |
------
-O| |
-
-We add right&bottom borders to the top-left cell (with X),
-but only right borrder to the bottom-left cell (with O), etc.
-*/
-.border_right {
-  border-right: min(1vw, 1vh) solid black;
-}
-.border_bottom {
-  border-bottom: min(1vw, 1vh) solid black;
-}
+/* grid lines for Othello 8x8 board */
 .row {
   position: absolute;
   left: 0%;
   width: 100%;
-}
-.column {
-  position: absolute;
-  top: 0;
-  height: 100%;
+  display: flex;
 }
 
-.max_size {
-  width: 100%;
+.cell {
+  position: relative;
+  width: 12.5%;
   height: 100%;
+  border: min(0.1vw, 0.1vh) solid rgb(101, 67, 33);
+  box-sizing: border-box;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
-svg {
-  width: 100%;
-  height: 100%;
+/* Disk pieces */
+.disk {
+  width: 85%;
+  height: 85%;
+  border-radius: 50%;
+  box-shadow: inset 0 0 min(0.5vw, 0.5vh) rgba(0, 0, 0, 0.5);
 }
 
-/* CSS animations to make the X/O appear slowly
-   (the opacity will change from 0.1 to 1 in 0.5s). */
+.disk.black {
+  background: radial-gradient(circle at 30% 30%, #333, #000);
+}
+
+.disk.white {
+  background: radial-gradient(circle at 30% 30%, #fff, #ddd);
+}
+
+/* highilight for the move being made */
+.highlight {
+  background-color: rgba(255, 255, 0, 0.3);
+}
+
+/* CSS animations to make disks appear */
 .slowly_appear {
-  animation: slowly_appear 0.5s linear;
+  animation: slowly_appear 0.5s ease-in-out;
 }
 
 @keyframes slowly_appear {
   from {
     opacity: 0.1;
+    transform: scale(0.5);
   }
   to {
     opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Score display */
+.score {
+  font-size: 2vh;
+  color: white;
+  text-align: center;
+  margin-top: 1vh;
+  font-weight: bold;
+}
+
+/* Responsive design for mobile */
+@media (max-width: 768px) {
+  .container {
+    gap: 3vh;
+  }
+  
+  .state-label {
+    font-size: 3vh;
+  }
+  
+  .game {
+    width: min(95vw, 60vh);
+    height: min(95vw, 60vh);
+  }
+}
+
+/* Tablet and larger screens - show states side by side */
+@media (min-width: 1024px) {
+  .container {
+    flex-direction: row;
+    justify-content: center;
+    align-items: flex-start;
+  }
+  
+  .game {
+    width: min(30vw, 40vh);
+    height: min(30vw, 40vh);
   }
 }
