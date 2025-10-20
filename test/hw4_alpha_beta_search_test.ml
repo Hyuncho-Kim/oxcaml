@@ -39,7 +39,34 @@ let print_computer_move state depth =
 let%expect_test "AI finds a move from initial position" =
   let state = Game_state.create ~rows:8 ~columns:8 |> ok_exn in
   print_computer_move state 3;
-  [%expect {| |}]
+  [%expect {|
+    ("Computer chooses this move" (move ((row 2) (column 3))))
+
+    This transitions the game from this state:
+      0 1 2 3 4 5 6 7
+    0 . . . . . . . .
+    1 . . . . . . . .
+    2 . . . . . . . .
+    3 . . . W B . . .
+    4 . . . B W . . .
+    5 . . . . . . . .
+    6 . . . . . . . .
+    7 . . . . . . . .
+    Scores: Black 2, White 2
+    (In_progress (whose_turn Black))
+
+    To this state:
+      0 1 2 3 4 5 6 7
+    0 . . . . . . . .
+    1 . . . . . . . .
+    2 . . . B . . . .
+    3 . . . B B . . .
+    4 . . . B W . . .
+    5 . . . . . . . .
+    6 . . . . . . . .
+    7 . . . . . . . .
+    Scores: Black 4, White 1
+    (In_progress (whose_turn White)) |}]
 ;;
 
 let%expect_test "AI makes legal moves" =
@@ -51,7 +78,7 @@ let%expect_test "AI makes legal moves" =
     | Ok _ -> printf "✓ AI made legal move at (%d, %d)\n" move.row move.column
     | Error _ -> print_endline "FAIL: AI returned illegal move")
   ;
-  [%expect {| |}]
+  [%expect {| ✓ AI made legal move at (2, 3) |}]
 ;;
 
 (* ================= STRATEGIC TESTS ================= *)
@@ -68,7 +95,34 @@ let%expect_test "AI prefers corner when available" =
     ~whose_turn:Black
   in
   print_computer_move state 3;
-  [%expect {| |}]
+  [%expect {|
+    ("Computer chooses this move" (move ((row 2) (column 1))))
+
+    This transitions the game from this state:
+      0 1 2 3 4 5 6 7
+    0 . B B . . . . .
+    1 W W . . . . . .
+    2 W . . . . . . .
+    3 . . . . . . . .
+    4 . . . . . . . .
+    5 . . . . . . . .
+    6 . . . . . . . .
+    7 . . . . . . . .
+    Scores: Black 2, White 3
+    (In_progress (whose_turn Black))
+
+    To this state:
+      0 1 2 3 4 5 6 7
+    0 . B B . . . . .
+    1 W B . . . . . .
+    2 W B . . . . . .
+    3 . . . . . . . .
+    4 . . . . . . . .
+    5 . . . . . . . .
+    6 . . . . . . . .
+    7 . . . . . . . .
+    Scores: Black 4, White 2
+    (In_progress (whose_turn White)) |}]
 ;;
 
 (* ================= RANDOM AI TESTS ================= *)
@@ -131,7 +185,18 @@ let%expect_test "Random vs Alpha-beta game" =
   let smart_ai = fun state -> alpha_beta state ~depth:2 in (*depth:3*)
   let final_state = play_ai_vs_ai ~black_ai:smart_ai ~white_ai:random_ai in
   pretty_print_board final_state;
-  [%expect {| |}]
+  [%expect {|
+      0 1 2 3 4 5 6 7
+    0 B B B B B B B B
+    1 B B B B B B B W
+    2 B B B B B B B W
+    3 B B B B B B B W
+    4 B B W B B B W B
+    5 B B B B W W B B
+    6 B B B W W B B B
+    7 B B B B B B B B
+    Scores: Black 55, White 9
+    (Game_over (winner (Black))) |}]
 ;;
 
 (* ================= HEURISTIC TESTS ================= *)
@@ -224,7 +289,15 @@ let%expect_test "Alpha-beta vs Random: 1000 games" =
   printf "Draws: %d\n" !draws;
   printf "Alpha-beta Win Rate: %.1f%%\n" (float_of_int !wins /. 1000.0 *. 100.0);
   printf "========================================\n";
-  [%expect {| |}]
+  [%expect {|
+    ========================================
+      1000 GAMES: Alpha-beta vs Random
+    ========================================
+    Alpha-beta Wins: 942
+    Random Wins: 53
+    Draws: 5
+    Alpha-beta Win Rate: 94.2%
+    ======================================== |}]
 ;;
 
 printf "\n✓ All alpha-beta tests completed\n"
