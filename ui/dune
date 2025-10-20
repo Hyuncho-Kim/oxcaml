@@ -1,2 +1,6 @@
-
-
+(executables
+ (modes js)
+ (names othello_ui)
+ (libraries bonsai.web core virtual_dom othello_logic_library)
+ (preprocess
+  (pps ppx_jane bonsai.ppx_bonsai)))

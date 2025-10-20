@@ -1,18 +1,33 @@
 <!DOCTYPE html>
 <html>
-
 <head>
-    <meta charset="UTF-8">
-    <title>TicTacToe</title>
-    <meta name="description" content="TicTacToe game">
+    <meta charset="utf-8">
+    <title>Othello</title>
+    <meta name="description" content="Othello game">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <link rel="stylesheet" type="text/css" href="hw5_html_css/hw5_static_state.css">
-    <link rel="icon" href="data:,">
-    <script defer src="generated_js/tictactoe_ui.bc.js"></script>
+    <style>
+        /* Force vertical layout */
+        .container {
+            flex-direction: column !important;
+            align-items: center !important;
+            width: 100% !important;
+            max-width: 100vw !important;
+        }
+        
+        .game {
+            width: min(90vw, 50vh) !important;
+            height: min(90vw, 50vh) !important;
+        }
+        
+        body {
+            overflow-x: hidden;
+            overflow-y: auto;
+        }
+    </style>
 </head>
-
 <body>
     <div id="app"></div>
+    <script src="_build/default/ui/othello_ui.bc.js"></script>
 </body>
-
 </html>
