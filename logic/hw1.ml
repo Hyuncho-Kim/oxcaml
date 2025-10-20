@@ -194,7 +194,7 @@ let terminal_state : game_state =
       ; { position = { row = 0; column = 3 }; owner = Black }
       ; { position = { row = 0; column = 4 }; owner = Black }
       ; { position = { row = 0; column = 5 }; owner = Black }
-      ; { position = { row = 0; column =  }; owner = Black }
+      ; { position = { row = 0; column = 6 }; owner = Black }
       ; { position = { row = 0; column = 7 }; owner = Black }
       ; { position = { row = 1; column = 0 }; owner = Black }
       ; { position = { row = 1; column = 7 }; owner = Black }
