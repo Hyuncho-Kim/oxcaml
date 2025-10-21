@@ -167,3 +167,43 @@ body {
     height: min(30vw, 40vh);
   }
 }
+
+/* Hover effect for legal moves */
+.box-shadow-with-hover-effect {
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.box-shadow-with-hover-effect:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+button {
+  font-family: Arial, sans-serif;
+  font-weight: bold;
+}
+
+/* Reset button styling - responsive */
+.reset-button {
+  padding: 1.5vh 3vh;
+  margin-top: 2vh;
+  font-size: 3vh;
+  font-weight: bold;
+  cursor: pointer;
+  background-color: white;
+  border: 0.3vh solid rgb(101, 67, 33);
+  border-radius: 1vh;
+  font-family: Arial, sans-serif;
+}
+
+.reset-button:hover {
+  background-color: rgb(240, 240, 240);
+}
+
+/* Game container for interactive mode */
+.game-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2vh;
+}
