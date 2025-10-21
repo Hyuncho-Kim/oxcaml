@@ -7,7 +7,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <link rel="stylesheet" type="text/css" href="hw5_html_css/hw5_static_state.css">
     <style>
-        /* Force vertical layout */
+        /* Force vertical layout and fix centering issue */
+        body {
+            justify-content: flex-start !important;
+            padding-top: 2vh;
+        }
+        
         .container {
             flex-direction: column !important;
             align-items: center !important;
@@ -18,11 +23,6 @@
         .game {
             width: min(90vw, 50vh) !important;
             height: min(90vw, 50vh) !important;
-        }
-        
-        body {
-            overflow-x: hidden;
-            overflow-y: auto;
         }
     </style>
 </head>

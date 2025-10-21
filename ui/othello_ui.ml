@@ -12,18 +12,14 @@ let lookup_cell (game_state : Game_state.t) ~row ~column =
 let othello_board ~(game_state : Game_state.t) =
   let render_cell ~row ~column =
     let cell_value = lookup_cell game_state ~row ~column in
-    let should_highlight =
+    let is_last_move =
       match game_state.last_move with
-      | Some last_move when Move.equal last_move { row; column } ->
-        [ Vdom.Attr.class_ "highlight" ]
-      | _ -> []
+      | Some last_move -> Move.equal last_move { row; column }
+      | None -> false
     in
-    let disk_attrs =
-      match game_state.last_move with
-      | Some last_move when Move.equal last_move { row; column } ->
-        [ Vdom.Attr.class_ "slowly_appear" ]
-      | _ -> []
-    in
+    let should_highlight = if is_last_move then [ Vdom.Attr.class_ "highlight" ] else [] in
+    let disk_attrs = if is_last_move then [ Vdom.Attr.class_ "slowly_appear" ] else [] in
+    
     let cell_content =
       match cell_value with
       | Some player ->
@@ -91,13 +87,19 @@ let create_triplet_1 () =
     | Error _ -> failwith "Failed to create initial state"
   in
   
-  (* Middle state: showing the move being made - just add last_move without changing board *)
-  let move_state = { initial_state with last_move = Some { row = 3; column = 2 } } in
+  (* Middle state: showing the move being made - add the disk but don't flip yet *)
+  let move_board = Map.set initial_state.board ~key:{ row = 3; column = 2 } ~data:Player_kind.Black in
+  let move_state = 
+    { initial_state with 
+      board = move_board
+    ; last_move = Some { row = 3; column = 2 }
+    } 
+  in
   
-  (* After move (3,2) - white disk at (3,3) flips to black *)
+  (* After move (3,2) - white disk at (3,3) flips to black - NO last_move so no highlight *)
   let after_move =
     match Game_state.make_move initial_state { row = 3; column = 2 } with
-    | Ok state -> state
+    | Ok state -> { state with last_move = None }
     | Error _ -> failwith "Failed to make move"
   in
   
@@ -156,10 +158,12 @@ let create_triplet_2 () =
       ~last_move:None
   in
   
-  (* Middle state: showing move at (7,3) *)
+  (* Middle state: showing move at (7,3) - add disk to board *)
+  let move_board = Map.set before_state.board ~key:{ row = 7; column = 3 } ~data:Player_kind.Black in
   let move_state =
     { before_state with
-      last_move = Some { row = 7; column = 3 }
+      board = move_board
+    ; last_move = Some { row = 7; column = 3 }
     }
   in
   
@@ -187,7 +191,7 @@ let create_triplet_2 () =
     ; (5, 3, Player_kind.Black); (5, 4, Player_kind.Black); (5, 5, Player_kind.White)
     ; (5, 6, Player_kind.Black); (5, 7, Player_kind.Black)
     ; (* row 6 *)
-      (6, 0, Player_kind.Black); (6, 1, Player_kind.Black); (6, 2, Player_kind.White)
+      (6, 0, Player_kind.Black); (6, 1, Player_kind.Black); (6, 2, Player_kind.Black)
     ; (6, 3, Player_kind.Black); (6, 6, Player_kind.Black)
     ; (* row 7 *)
       (7, 3, Player_kind.Black); (7, 7, Player_kind.Black)
@@ -200,7 +204,7 @@ let create_triplet_2 () =
       ~rows:8
       ~columns:8
       ~decision:(Decision.In_progress { whose_turn = Player_kind.White })
-      ~last_move:(Some { row = 7; column = 3 })
+      ~last_move:None
   in
   
   before_state, move_state, after_state
@@ -254,10 +258,12 @@ let create_triplet_3 () =
       ~last_move:None
   in
   
-  (* Move at (1,6) *)
+  (* Move at (1,6) - add disk to board *)
+  let move_board = Map.set before_state.board ~key:{ row = 1; column = 6 } ~data:Player_kind.White in
   let move_state =
     { before_state with
-      last_move = Some { row = 1; column = 6 }
+      board = move_board
+    ; last_move = Some { row = 1; column = 6 }
     }
   in
   
@@ -304,7 +310,7 @@ let create_triplet_3 () =
       ~rows:8
       ~columns:8
       ~decision:(Decision.Game_over { winner = Some Player_kind.Black })
-      ~last_move:(Some { row = 1; column = 6 })
+      ~last_move:None
   in
   
   before_state, move_state, terminal_state
