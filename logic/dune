@@ -1,5 +1,6 @@
 (library
  (name othello_logic_library)
+ (modules hw2_othello_logic hw4_alpha_beta_search)
  (libraries core)
  ;(inline_tests)
  (preprocess

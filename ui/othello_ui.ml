@@ -1,26 +1,55 @@
 open! Core
 open Othello_logic_library
 open Hw2_othello_logic
+open Hw4_alpha_beta_search
 open Virtual_dom
 open! Bonsai.Let_syntax
+
+(* Game mode type - must be defined first *)
+type game_mode =
+  | PassAndPlay
+  | VsComputer of { human_player : Player_kind.t }
+[@@deriving sexp, equal]
+
+(* Game screen type *)
+type screen =
+  | LandingPage
+  | GameScreen of game_mode
+[@@deriving sexp, equal]
 
 let lookup_cell (game_state : Game_state.t) ~row ~column =
   Map.find game_state.board { row; column }
 ;;
 
 (* Render the interactive Othello board *)
-let othello_board ~(game_state : Game_state.t) ~set_game_state =
+let othello_board ~(game_state : Game_state.t) ~set_game_state ~game_mode ~previous_state:_ =
   let is_game_over = Decision.is_game_over game_state.decision in
+  
+  (* Check if it's AI's turn *)
+  let is_ai_turn =
+    match game_mode with
+    | PassAndPlay -> false
+    | VsComputer { human_player } ->
+      (match game_state.decision with
+       | In_progress { whose_turn } -> not (Player_kind.equal whose_turn human_player)
+       | Game_over _ -> false)
+  in
   
   let render_cell ~row ~column =
     let cell_value = lookup_cell game_state ~row ~column in
     let is_last_move =
       match game_state.last_move with
-      | Some last_move -> Move.equal last_move { row; column }
+      | Some { row = last_row; column = last_col } -> 
+        last_row = row && last_col = column
       | None -> false
     in
     let should_highlight = if is_last_move then [ Vdom.Attr.class_ "highlight" ] else [] in
-    let disk_attrs = if is_last_move then [ Vdom.Attr.class_ "slowly_appear" ] else [] in
+    
+    let disk_attrs = 
+      if is_last_move 
+      then [ Vdom.Attr.class_ "slowly_appear" ]
+      else []
+    in
     
     (* Determine if cell is clickable *)
     let cell_attrs, cell_content =
@@ -33,40 +62,30 @@ let othello_board ~(game_state : Game_state.t) ~set_game_state =
           | Player_kind.White -> "disk white"
         in
         [], [ Vdom.Node.div ~attrs:(Vdom.Attr.class_ disk_class :: disk_attrs) [] ]
-      | None when is_game_over ->
-        (* Game is over - not clickable *)
+      | None when is_game_over || is_ai_turn ->
+        (* Game is over or AI's turn - not clickable *)
         [], []
       | None ->
         (* Empty cell - check if it's a legal move *)
-        let current_player =
-          match game_state.decision with
-          | In_progress { whose_turn } -> Some whose_turn
-          | Game_over _ -> None
-        in
-        (match current_player with
-         | None -> [], []
-         | Some _ ->
-           (* Check if this is a legal move by seeing if it would succeed *)
-           let is_legal =
-             match Game_state.make_move game_state { row; column } with
-             | Ok _ -> true
-             | Error _ -> false
+        (let is_legal =
+           match Game_state.make_move game_state { row; column } with
+           | Ok _ -> true
+           | Error _ -> false
+         in
+         if is_legal
+         then (
+           (* Legal move - make it clickable *)
+           let click_attr =
+             Vdom.Attr.(
+               class_ "box-shadow-with-hover-effect"
+               @ on_click (fun _ ->
+                 match Game_state.make_move game_state { row; column } with
+                 | Error _ -> Ui_effect.Ignore
+                 | Ok new_game_state -> set_game_state new_game_state))
            in
-           if is_legal
-           then (
-             (* Legal move - make it clickable *)
-             let click_attr =
-               Vdom.Attr.(
-                 class_ "box-shadow-with-hover-effect"
-                 @ on_click (fun _ ->
-                   match Game_state.make_move game_state { row; column } with
-                   | Error _ -> Ui_effect.Ignore
-                   | Ok new_game_state -> set_game_state new_game_state))
-             in
-             [ click_attr ], [])
-           else [], [])
+           [ click_attr ], [])
+         else [], [])
     in
-    
     Vdom.Node.div
       ~attrs:([ Vdom.Attr.class_ "cell" ] @ should_highlight @ cell_attrs)
       cell_content
@@ -92,23 +111,31 @@ let othello_board ~(game_state : Game_state.t) ~set_game_state =
 ;;
 
 (* Render game info: whose turn, scores, game status *)
-let render_game_info (game_state : Game_state.t) =
+let render_game_info (game_state : Game_state.t) ~game_mode =
   let black_score, white_score = Game_state.scores game_state in
   let status_text =
     match game_state.decision with
     | In_progress { whose_turn } ->
-      sprintf "%s's turn" (Player_kind.to_string whose_turn)
+      let player_str = Player_kind.to_string whose_turn in
+      (match game_mode with
+       | PassAndPlay -> sprintf "%s's turn" player_str
+       | VsComputer { human_player } ->
+         if Player_kind.equal whose_turn human_player
+         then "Your turn"
+         else "AI is thinking...")
     | Game_over { winner = Some player } ->
-      sprintf "Game Over - %s Wins!" (Player_kind.to_string player)
+      (match game_mode with
+       | PassAndPlay -> sprintf "Game Over - %s Wins!" (Player_kind.to_string player)
+       | VsComputer { human_player } ->
+         if Player_kind.equal player human_player
+         then "You Win!"
+         else "AI Wins!")
     | Game_over { winner = None } -> "Game Over - Draw!"
   in
   Vdom.Node.div
-    ~attrs:[ Vdom.Attr.style (Css_gen.create ~field:"text-align" ~value:"center") ]
+    ~attrs:[ Vdom.Attr.class_ "game-info" ]
     [ Vdom.Node.div
-        ~attrs:
-          [ Vdom.Attr.class_ "state-label"
-          ; Vdom.Attr.style (Css_gen.create ~field:"margin-bottom" ~value:"1vh")
-          ]
+        ~attrs:[ Vdom.Attr.class_ "state-label" ]
         [ Vdom.Node.text status_text ]
     ; Vdom.Node.div
         ~attrs:[ Vdom.Attr.class_ "score" ]
@@ -116,14 +143,54 @@ let render_game_info (game_state : Game_state.t) =
     ]
 ;;
 
-(* Render reset button *)
-let render_reset_button ~on_reset =
-  Vdom.Node.button
-    ~attrs:
-      [ Vdom.Attr.on_click (fun _ -> on_reset)
-      ; Vdom.Attr.class_ "reset-button"
-      ]
-    [ Vdom.Node.text "New Game" ]
+(* Render landing page with mode selection *)
+let render_landing_page ~on_select_mode =
+  Vdom.Node.div
+    ~attrs:[ Vdom.Attr.class_ "landing-page" ]
+    [ Vdom.Node.h1
+        ~attrs:[ Vdom.Attr.class_ "landing-title" ]
+        [ Vdom.Node.text "Othello" ]
+    ; Vdom.Node.div
+        ~attrs:[ Vdom.Attr.class_ "landing-buttons" ]
+        [ Vdom.Node.button
+            ~attrs:
+              [ Vdom.Attr.on_click (fun _ -> on_select_mode PassAndPlay)
+              ; Vdom.Attr.class_ "landing-button"
+              ]
+            [ Vdom.Node.text "Pass & Play" ]
+        ; Vdom.Node.button
+            ~attrs:
+              [ Vdom.Attr.on_click (fun _ -> on_select_mode (VsComputer { human_player = Black }))
+              ; Vdom.Attr.class_ "landing-button"
+              ]
+            [ Vdom.Node.text "Play as Black vs AI" ]
+        ; Vdom.Node.button
+            ~attrs:
+              [ Vdom.Attr.on_click (fun _ -> on_select_mode (VsComputer { human_player = White }))
+              ; Vdom.Attr.class_ "landing-button"
+              ]
+            [ Vdom.Node.text "Play as White vs AI" ]
+        ]
+    ]
+;;
+
+(* Render game buttons (back and new game) *)
+let render_game_buttons ~on_back ~on_new_game =
+  Vdom.Node.div
+    ~attrs:[ Vdom.Attr.class_ "button-container" ]
+    [ Vdom.Node.button
+        ~attrs:
+          [ Vdom.Attr.on_click (fun _ -> on_back)
+          ; Vdom.Attr.class_ "game-button"
+          ]
+        [ Vdom.Node.text "← Back" ]
+    ; Vdom.Node.button
+        ~attrs:
+          [ Vdom.Attr.on_click (fun _ -> on_new_game)
+          ; Vdom.Attr.class_ "game-button"
+          ]
+        [ Vdom.Node.text "New Game" ]
+    ]
 ;;
 
 (* Main app component *)
@@ -136,15 +203,93 @@ let app =
   let%sub game_state, set_game_state =
     Bonsai.state ~default_model:initial_state (module Game_state)
   in
-  let%arr game_state = game_state
-  and set_game_state = set_game_state in
+  let%sub previous_state, set_previous_state =
+    Bonsai.state ~default_model:None (
+      module struct
+        type t = Game_state.t option [@@deriving sexp, equal]
+      end)
+  in
+  let%sub screen, set_screen =
+    Bonsai.state ~default_model:LandingPage (
+      module struct
+        type t = screen [@@deriving sexp, equal]
+      end)
+  in
   
-  Vdom.Node.div
-    ~attrs:[ Vdom.Attr.class_ "container game-container" ]
-    [ render_game_info game_state
-    ; othello_board ~game_state ~set_game_state
-    ; render_reset_button ~on_reset:(set_game_state initial_state)
-    ]
+  (* AI move effect - triggers when it's AI's turn with delays *)
+  let%sub () =
+    let%sub effect =
+      let%arr game_state = game_state
+      and set_game_state = set_game_state
+      and set_previous_state = set_previous_state
+      and screen = screen in
+      match screen with
+      | LandingPage -> Ui_effect.Ignore
+      | GameScreen game_mode ->
+        (match game_mode with
+         | PassAndPlay -> Ui_effect.Ignore
+         | VsComputer { human_player } ->
+           (match game_state.decision with
+            | In_progress { whose_turn } when not (Player_kind.equal whose_turn human_player) ->
+              (* It's AI's turn - make a move after 2 second delay *)
+              Ui_effect.of_sync_fun
+                (fun () ->
+                   match alpha_beta game_state ~depth:4 with
+                   | None -> ()
+                   | Some move ->
+                     (* Schedule AI move with setTimeout *)
+                     let (_ : float) =
+                       Js_of_ocaml.Js.Unsafe.fun_call
+                         (Js_of_ocaml.Js.Unsafe.js_expr "setTimeout")
+                         [| Js_of_ocaml.Js.Unsafe.inject
+                              (Js_of_ocaml.Js.wrap_callback (fun () ->
+                                 match Game_state.make_move game_state move with
+                                 | Error _ -> ()
+                                 | Ok new_state ->
+                                   Ui_effect.Expert.handle
+                                     (Ui_effect.Many
+                                        [ set_previous_state (Some game_state)
+                                        ; set_game_state new_state
+                                        ])))
+                         ; Js_of_ocaml.Js.Unsafe.inject 2000
+                         |]
+                     in
+                     ())
+                ()
+            | _ -> Ui_effect.Ignore))
+    in
+    Bonsai.Edge.lifecycle ~after_display:effect ()
+  in
+  
+  let%arr game_state = game_state
+  and set_game_state = set_game_state
+  and previous_state = previous_state
+  and set_previous_state = set_previous_state
+  and screen = screen
+  and set_screen = set_screen in
+  
+  (* Helper to update game state and track previous *)
+  let update_game_state new_state =
+    Ui_effect.Many [ set_previous_state (Some game_state); set_game_state new_state ]
+  in
+  
+  match screen with
+  | LandingPage ->
+    render_landing_page ~on_select_mode:(fun mode ->
+      Ui_effect.Many
+        [ set_game_state initial_state
+        ; set_previous_state None
+        ; set_screen (GameScreen mode)
+        ])
+  | GameScreen game_mode ->
+    Vdom.Node.div
+      ~attrs:[ Vdom.Attr.class_ "container game-container" ]
+      [ render_game_info game_state ~game_mode
+      ; othello_board ~game_state ~set_game_state:update_game_state ~game_mode ~previous_state
+      ; render_game_buttons
+          ~on_back:(Ui_effect.Many [ set_screen LandingPage; set_previous_state None ])
+          ~on_new_game:(Ui_effect.Many [ set_game_state initial_state; set_previous_state None ])
+      ]
 ;;
 
 let () = Bonsai_web.Start.start app
