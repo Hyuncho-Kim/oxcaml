@@ -11,6 +11,12 @@ type game_mode =
   | VsComputer of { human_player : Player_kind.t }
 [@@deriving sexp, equal]
 
+(* Move stage - for animating the placement and flipping separately *)
+type move_stage =
+  | NotMoving
+  | DiskPlaced of { intermediate_state : Game_state.t; final_state : Game_state.t }
+[@@deriving sexp, equal]
+
 (* Game screen type *)
 type screen =
   | LandingPage
@@ -21,9 +27,32 @@ let lookup_cell (game_state : Game_state.t) ~row ~column =
   Map.find game_state.board { row; column }
 ;;
 
+(* Create intermediate state - disk placed but no flips yet *)
+let create_intermediate_state (game_state : Game_state.t) (row : int) (column : int) =
+  match game_state.decision with
+  | Game_over _ -> None
+  | In_progress { whose_turn } ->
+    (* Create a new board with just the disk placed, no flips *)
+    let cell_pos : Cell_position.t = { row; column } in
+    let new_board = Map.set game_state.board ~key:cell_pos ~data:whose_turn in
+    Some
+      { game_state with
+        board = new_board
+      ; last_move = Some { row; column }
+      ; decision = In_progress { whose_turn } (* Keep same turn temporarily *)
+      }
+;;
+
 (* Render the interactive Othello board *)
-let othello_board ~(game_state : Game_state.t) ~set_game_state ~game_mode ~previous_state:_ =
+let othello_board ~(game_state : Game_state.t) ~set_game_state ~game_mode ~previous_state:_ ~move_stage ~set_move_stage =
   let is_game_over = Decision.is_game_over game_state.decision in
+  
+  (* Check if we're in animation stage *)
+  let is_animating = 
+    match move_stage with
+    | NotMoving -> false
+    | DiskPlaced _ -> true
+  in
   
   (* Check if it's AI's turn *)
   let is_ai_turn =
@@ -62,8 +91,8 @@ let othello_board ~(game_state : Game_state.t) ~set_game_state ~game_mode ~previ
           | Player_kind.White -> "disk white"
         in
         [], [ Vdom.Node.div ~attrs:(Vdom.Attr.class_ disk_class :: disk_attrs) [] ]
-      | None when is_game_over || is_ai_turn ->
-        (* Game is over or AI's turn - not clickable *)
+      | None when is_game_over || is_ai_turn || is_animating ->
+        (* Game is over, AI's turn, or currently animating - not clickable *)
         [], []
       | None ->
         (* Empty cell - check if it's a legal move *)
@@ -81,7 +110,33 @@ let othello_board ~(game_state : Game_state.t) ~set_game_state ~game_mode ~previ
                @ on_click (fun _ ->
                  match Game_state.make_move game_state { row; column } with
                  | Error _ -> Ui_effect.Ignore
-                 | Ok new_game_state -> set_game_state new_game_state))
+                 | Ok final_state ->
+                   (* Create intermediate state and schedule the flip *)
+                   (match create_intermediate_state game_state row column with
+                    | None -> Ui_effect.Ignore
+                    | Some intermediate_state ->
+                      Ui_effect.Many
+                        [ set_game_state intermediate_state
+                        ; set_move_stage (DiskPlaced { intermediate_state; final_state })
+                        ; Ui_effect.of_sync_fun
+                            (fun () ->
+                               (* After 0.4 second, complete the move *)
+                               let (_ : float) =
+                                 Js_of_ocaml.Js.Unsafe.fun_call
+                                   (Js_of_ocaml.Js.Unsafe.js_expr "setTimeout")
+                                   [| Js_of_ocaml.Js.Unsafe.inject
+                                        (Js_of_ocaml.Js.wrap_callback (fun () ->
+                                           Ui_effect.Expert.handle
+                                             (Ui_effect.Many
+                                                [ set_game_state final_state
+                                                ; set_move_stage NotMoving
+                                                ])))
+                                   ; Js_of_ocaml.Js.Unsafe.inject 400
+                                   |]
+                               in
+                               ())
+                            ()
+                        ])))
            in
            [ click_attr ], [])
          else [], [])
@@ -209,6 +264,12 @@ let app =
         type t = Game_state.t option [@@deriving sexp, equal]
       end)
   in
+  let%sub move_stage, set_move_stage =
+    Bonsai.state ~default_model:NotMoving (
+      module struct
+        type t = move_stage [@@deriving sexp, equal]
+      end)
+  in
   let%sub screen, set_screen =
     Bonsai.state ~default_model:LandingPage (
       module struct
@@ -217,45 +278,108 @@ let app =
   in
   
   (* AI move effect - triggers when it's AI's turn with delays *)
+  let%sub ai_has_moved, set_ai_has_moved =
+    Bonsai.state ~default_model:None (
+      module struct
+        type t = Game_state.t option [@@deriving sexp, equal]
+      end)
+  in
+
+  (* Add a new state to track if AI is currently moving *)
+  let%sub ai_is_moving, set_ai_is_moving =
+    Bonsai.state ~default_model:false (
+      module struct
+        type t = bool [@@deriving sexp, equal]
+      end)
+  in
+
   let%sub () =
     let%sub effect =
       let%arr game_state = game_state
       and set_game_state = set_game_state
       and set_previous_state = set_previous_state
-      and screen = screen in
+      and move_stage = move_stage
+      and screen = screen
+      and ai_has_moved = ai_has_moved
+      and set_ai_has_moved = set_ai_has_moved
+      and ai_is_moving = ai_is_moving
+      and set_ai_is_moving = set_ai_is_moving in
       match screen with
       | LandingPage -> Ui_effect.Ignore
       | GameScreen game_mode ->
-        (match game_mode with
-         | PassAndPlay -> Ui_effect.Ignore
-         | VsComputer { human_player } ->
-           (match game_state.decision with
+        (match game_mode, move_stage with
+        | PassAndPlay, _ -> Ui_effect.Ignore
+        | _, DiskPlaced _ -> Ui_effect.Ignore (* Already animating *)
+        | VsComputer { human_player }, NotMoving ->
+          (match game_state.decision with
             | In_progress { whose_turn } when not (Player_kind.equal whose_turn human_player) ->
-              (* It's AI's turn - make a move after 2 second delay *)
-              Ui_effect.of_sync_fun
-                (fun () ->
-                   match alpha_beta game_state ~depth:4 with
-                   | None -> ()
-                   | Some move ->
-                     (* Schedule AI move with setTimeout *)
-                     let (_ : float) =
-                       Js_of_ocaml.Js.Unsafe.fun_call
-                         (Js_of_ocaml.Js.Unsafe.js_expr "setTimeout")
-                         [| Js_of_ocaml.Js.Unsafe.inject
-                              (Js_of_ocaml.Js.wrap_callback (fun () ->
-                                 match Game_state.make_move game_state move with
-                                 | Error _ -> ()
-                                 | Ok new_state ->
-                                   Ui_effect.Expert.handle
-                                     (Ui_effect.Many
-                                        [ set_previous_state (Some game_state)
-                                        ; set_game_state new_state
-                                        ])))
-                         ; Js_of_ocaml.Js.Unsafe.inject 2000
-                         |]
-                     in
-                     ())
-                ()
+              (* Check if AI is already moving or if we've already processed this state *)
+              if ai_is_moving then
+                Ui_effect.Ignore
+              else
+                (match ai_has_moved with
+                | Some prev_state when Game_state.equal prev_state game_state -> 
+                  Ui_effect.Ignore
+                | _ ->
+                  (* It's AI's turn - make a move after 2 second delay *)
+                  Ui_effect.Many
+                    [ set_ai_has_moved (Some game_state)
+                    ; set_ai_is_moving true  (* Mark that AI is moving *)
+                    ; Ui_effect.of_sync_fun
+                        (fun () ->
+                            match alpha_beta game_state ~depth:4 with
+                            | None -> ()
+                            | Some { row; column } ->
+                              (* Schedule AI move with setTimeout *)
+                              let (_ : float) =
+                                Js_of_ocaml.Js.Unsafe.fun_call
+                                  (Js_of_ocaml.Js.Unsafe.js_expr "setTimeout")
+                                  [| Js_of_ocaml.Js.Unsafe.inject
+                                      (Js_of_ocaml.Js.wrap_callback (fun () ->
+                                          match Game_state.make_move game_state { row; column } with
+                                          | Error _ -> 
+                                            Ui_effect.Expert.handle (set_ai_is_moving false)
+                                          | Ok final_state ->
+                                            (* Show intermediate state first *)
+                                            (match create_intermediate_state game_state row column with
+                                            | None -> 
+                                              Ui_effect.Expert.handle (set_ai_is_moving false)
+                                            | Some intermediate_state ->
+                                              Ui_effect.Expert.handle
+                                                (Ui_effect.Many
+                                                    [ set_previous_state (Some game_state)
+                                                    ; set_game_state intermediate_state
+                                                    ]);
+                                              (* Then after 400ms, flip the disks *)
+                                              let (_ : float) =
+                                                Js_of_ocaml.Js.Unsafe.fun_call
+                                                  (Js_of_ocaml.Js.Unsafe.js_expr "setTimeout")
+                                                  [| Js_of_ocaml.Js.Unsafe.inject
+                                                        (Js_of_ocaml.Js.wrap_callback (fun () ->
+                                                          Ui_effect.Expert.handle
+                                                            (Ui_effect.Many
+                                                                [ set_game_state final_state
+                                                                ; set_ai_is_moving false  (* Done moving *)
+                                                                ; set_ai_has_moved None
+                                                                ])))
+                                                  ; Js_of_ocaml.Js.Unsafe.inject 400
+                                                  |]
+                                              in
+                                              ())))
+                                  ; Js_of_ocaml.Js.Unsafe.inject 1000
+                                  |]
+                              in
+                              ())
+                        ()
+                    ])
+            | In_progress { whose_turn } when Player_kind.equal whose_turn human_player ->
+              (* It's human's turn - reset the AI tracking *)
+              if ai_is_moving then
+                Ui_effect.Ignore  (* Wait for AI to finish *)
+              else
+                (match ai_has_moved with
+                | None -> Ui_effect.Ignore
+                | Some _ -> set_ai_has_moved None)
             | _ -> Ui_effect.Ignore))
     in
     Bonsai.Edge.lifecycle ~after_display:effect ()
@@ -265,6 +389,8 @@ let app =
   and set_game_state = set_game_state
   and previous_state = previous_state
   and set_previous_state = set_previous_state
+  and move_stage = move_stage
+  and set_move_stage = set_move_stage
   and screen = screen
   and set_screen = set_screen in
   
@@ -279,16 +405,33 @@ let app =
       Ui_effect.Many
         [ set_game_state initial_state
         ; set_previous_state None
+        ; set_move_stage NotMoving
         ; set_screen (GameScreen mode)
         ])
   | GameScreen game_mode ->
     Vdom.Node.div
       ~attrs:[ Vdom.Attr.class_ "container game-container" ]
       [ render_game_info game_state ~game_mode
-      ; othello_board ~game_state ~set_game_state:update_game_state ~game_mode ~previous_state
+      ; othello_board
+          ~game_state
+          ~set_game_state:update_game_state
+          ~game_mode
+          ~previous_state
+          ~move_stage
+          ~set_move_stage
       ; render_game_buttons
-          ~on_back:(Ui_effect.Many [ set_screen LandingPage; set_previous_state None ])
-          ~on_new_game:(Ui_effect.Many [ set_game_state initial_state; set_previous_state None ])
+          ~on_back:
+            (Ui_effect.Many
+               [ set_screen LandingPage
+               ; set_previous_state None
+               ; set_move_stage NotMoving
+               ])
+          ~on_new_game:
+            (Ui_effect.Many
+               [ set_game_state initial_state
+               ; set_previous_state None
+               ; set_move_stage NotMoving
+               ])
       ]
 ;;
 
