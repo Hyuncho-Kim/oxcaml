@@ -5,31 +5,577 @@
     <title>Othello</title>
     <meta name="description" content="Othello game">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-    <link rel="stylesheet" type="text/css" href="hw5_html_css/hw5_static_state.css">
+    <!-- <link rel="stylesheet" type="text/css" href="style.css"> -->
     <style>
-        /* Force vertical layout and fix centering issue */
+        /* base styles */
         body {
-            justify-content: flex-start !important;
-            padding-top: 2vh;
+            background-color: rgb(34, 139, 34);
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            min-height: 100vh;
+            overflow-x: hidden;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
+            font-family: Arial, sans-serif;
+            padding-top: 20px;
         }
-        
+
+        /* Prevent text selection */
+        * {
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Auth section*/
+        .auth-section {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            padding: clamp(20px, 3vh, 30px) clamp(30px, 5vw, 50px);
+            border-radius: 12px;
+            margin: 20px auto;
+            text-align: center;
+            width: min(90%, 500px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            box-sizing: border-box;
+        }
+
+        .auth-section p {
+            margin: 0 0 15px 0;
+            font-size: clamp(24px, 4vw, 36px);
+            color: white;
+            font-weight: 700;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .auth-button {
+            padding: clamp(15px, 2.5vh, 22px) clamp(25px, 4vw, 40px);
+            font-size: clamp(18px, 3vw, 26px);
+            background: white;
+            color: rgb(34, 139, 34);
+            border: 3px solid white;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            white-space: nowrap;
+        }
+
+        .auth-button:hover {
+            background: rgb(255, 235, 205);
+            color: rgb(101, 67, 33);
+            border-color: rgb(255, 235, 205);
+            transform: scale(1.02);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+        }
+
+        .user-id {
+            font-size: clamp(14px, 2vw, 16px);  /* Smaller font */
+            color: white;
+            font-family: monospace;
+            background: rgba(0, 0, 0, 0.25);
+            padding: 8px 12px;
+            border-radius: 8px;
+            display: inline-block;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+        }
+
+        /* Auth form screens */
+        .auth-form-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 80vh;
+            padding: 20px;
+            gap: 30px;
+        }
+
+        .auth-form-title {
+            font-size: clamp(48px, 8vw, 72px);
+            color: white;
+            text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.7);
+            margin: 0;
+        }
+
+        .auth-form-box {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            padding: 40px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            width: min(90%, 500px);  /* Same as auth-section and landing-button */
+            max-width: 500px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            box-sizing: border-box;
+        }
+
+        .auth-form-box .landing-button.online-button {
+            width: 100%;
+            text-align: center;
+        }
+
+        .auth-input {
+            width: 100%;
+            padding: 15px;
+            font-size: clamp(16px, 2.5vw, 20px);
+            border-radius: 8px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.9);
+            box-sizing: border-box;
+        }
+
+        .auth-error {
+            color: #ff6b6b;
+            font-size: clamp(14px, 2vw, 16px);
+            min-height: 20px;
+            font-weight: 600;
+        }
+
+        .auth-switch-text {
+            color: white;
+            font-size: clamp(14px, 2vw, 18px);
+            margin-top: 10px;
+        }
+
+        .auth-link {
+            color: #4fc3f7;
+            cursor: pointer;
+            text-decoration: underline;
+            font-weight: bold;
+        }
+
+        .auth-link:hover {
+            color: #81d4fa;
+        }
+
+        .auth-buttons-row {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 15px;
+            width: 100%;
+        }
+
+        .auth-buttons-row .auth-button {
+            flex: 1;
+            min-width: 130px;
+            max-width: 220px;
+        }
+
+        /* Landing page */
+        .landing-page {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            gap: clamp(20px, 3vh, 40px);
+            min-height: 80vh;
+            padding: 20px;
+            width: 100%;
+            max-width: 1200px;
+        }
+
+        .landing-title {
+            font-size: clamp(48px, 10vw, 96px);
+            color: white;
+            text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.7);
+            margin: 20px 0;
+        }
+
+        .landing-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: clamp(15px, 2vh, 25px);
+            align-items: center;
+            width: 100%;
+            max-width: 600px;
+        }
+
+        .landing-buttons h3 {
+            color: white;
+            margin: clamp(20px, 3vh, 40px) 0 clamp(10px, 1.5vh, 20px) 0;
+            font-size: clamp(24px, 4vw, 36px);
+            font-weight: 700;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .landing-buttons h3:first-child {
+            margin-top: 0;
+        }
+
+        .landing-button {
+            padding: clamp(15px, 2.5vh, 22px) clamp(30px, 5vw, 50px);
+            font-size: clamp(18px, 3vw, 26px);
+            font-weight: bold;
+            cursor: pointer;
+            background-color: white;
+            border: 3px solid rgb(101, 67, 33);
+            border-radius: 12px;
+            font-family: Arial, sans-serif;
+            width: min(90%, 500px);
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .landing-button:hover {
+            background-color: rgb(255, 235, 205);
+            transform: scale(1.02);
+        }
+
+        /* Online play buttons - Black with white text */
+        .online-button {
+            background: #1a1a1a !important;
+            color: white !important;
+            border: 3px solid #333 !important;
+        }
+
+        .online-button:hover {
+            background: #000 !important;
+            border-color: #555 !important;
+        }
+
+        /* Game styles */
         .container {
-            flex-direction: column !important;
-            align-items: center !important;
-            width: 100% !important;
-            max-width: 100vw !important;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            max-width: 100vw;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .game {
+            width: min(90vw, 90vh, 600px);
+            height: min(90vw, 90vh, 600px);
+            aspect-ratio: 1;
+            position: relative;
+            background-color: rgb(34, 139, 34);
+            border: 5px solid rgb(101, 67, 33);
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .row {
+            position: absolute;
+            left: 0%;
+            width: 100%;
+            display: flex;
+        }
+
+        .cell {
+            position: relative;
+            width: 12.5%;
+            height: 100%;
+            border: 1px solid rgb(101, 67, 33);
+            box-sizing: border-box;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .disk {
+            width: 85%;
+            height: 85%;
+            border-radius: 50%;
+            box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.5);
+        }
+
+        .disk.black {
+            background: radial-gradient(circle at 30% 30%, #333, #000);
+        }
+
+        .disk.white {
+            background: radial-gradient(circle at 30% 30%, #fff, #ddd);
+        }
+
+        .highlight {
+            background-color: rgba(255, 255, 0, 0.3);
+        }
+
+        .slowly_appear {
+            animation: slowly_appear 0.5s ease-in-out;
+        }
+
+        @keyframes slowly_appear {
+            from {
+                opacity: 0.1;
+                transform: scale(0.5);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .box-shadow-with-hover-effect {
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        .box-shadow-with-hover-effect:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .game-info {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .state-label {
+            font-size: clamp(20px, 3vw, 28px);
+            font-weight: bold;
+            color: white;
+            text-align: center;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        .score {
+            font-size: clamp(16px, 2.5vw, 22px);
+            color: white;
+            text-align: center;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+
+        .button-container {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .game-button {
+            padding: clamp(12px, 2vh, 16px) clamp(24px, 4vw, 32px);
+            font-size: clamp(16px, 2.5vw, 20px);
+            font-weight: bold;
+            cursor: pointer;
+            background-color: white;
+            border: 3px solid rgb(101, 67, 33);
+            border-radius: 8px;
+            font-family: Arial, sans-serif;
+        }
+
+        .game-button:hover {
+            background-color: rgb(240, 240, 240);
+        }
+
+        /* Mobile optimization */
+        @media (max-width: 768px) {
+            .landing-button {
+                width: 85%;
+            }
+            
+            .auth-section {
+                width: 85%;
+            }
+        }
+
+        /* Create/Join game screens */
+        .create-game-screen, .join-game-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 80vh;
+            padding: 20px;
+            gap: 30px;
+        }
+
+        .create-game-title, .join-game-title {
+            font-size: clamp(48px, 8vw, 72px);
+            color: white;
+            text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.7);
+            margin: 0;
+        }
+
+        .game-id-box, .join-game-form {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            padding: 40px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            width: min(90%, 500px);  /* Same as buttons */
+            max-width: 500px;
+            box-sizing: border-box;
+        }
+
+        .game-id-code {
+            font-family: monospace;
+            font-size: clamp(20px, 3.5vw, 28px);  /* Smaller font */
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 8px;
+            color: white;
+            font-weight: bold;
+            letter-spacing: 1px;  /* Less spacing */
+            margin: 20px 0;
+            user-select: all;
+            word-break: break-all;  /* Allow wrapping if needed */
+        }
+
+        .game-id-instruction {
+            color: white;
+            font-size: clamp(14px, 2vw, 18px);
+            margin-top: 15px;
+            opacity: 0.9;
+        }
+
+        .game-id-input {
+            width: 100%;
+            padding: 15px;
+            font-size: clamp(18px, 3vw, 24px);
+            border-radius: 8px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.9);
+            margin: 20px 0;
+            font-family: monospace;
+            text-align: center;
+            box-sizing: border-box;
+        }
+
+        .game-id-display {
+            color: white;
+            font-size: clamp(14px, 2vw, 18px);
+            margin-top: 8px;
+            font-family: monospace;
+            background: rgba(0, 0, 0, 0.25);
+            padding: 8px 15px;
+            border-radius: 6px;
+            display: inline-block;
+        }
+
+        .back-button {
+            background: rgba(255, 255, 255, 0.1) !important;
+            margin-top: 20px;
+        }
+
+        .button-row {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 20px;
         }
         
-        .game {
-            width: min(90vw, 50vh) !important;
-            height: min(90vw, 50vh) !important;
+        /* Matchmaking screen */
+        .matchmaking-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 80vh;
+            padding: 20px;
+            gap: 30px;
+        }
+
+        .matchmaking-title {
+            font-size: clamp(48px, 8vw, 72px);
+            color: white;
+            text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.7);
+            margin: 0;
+        }
+
+        .matchmaking-spinner {
+            font-size: clamp(64px, 12vw, 96px);
+            animation: spin 2s linear infinite;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .matchmaking-text {
+            font-size: clamp(20px, 3vw, 28px);
+            color: white;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+            font-weight: 600;
         }
     </style>
+    
+    <!-- Load Firebase FIRST before any other scripts -->
+    <script type="module">
+      import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+      import { getAuth, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+      import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot, query, where, updateDoc, deleteDoc, addDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+      // Your Firebase configuration - REPLACE WITH YOUR ACTUAL CONFIG
+      const firebaseConfig = {
+        apiKey: "AIzaSyC6PAdfODVjYyFQm8TFukbgT49iSL-r6XY",
+        authDomain: "othello-dd9a2.firebaseapp.com",
+        projectId: "othello-dd9a2",
+        storageBucket: "othello-dd9a2.firebasestorage.app",
+        messagingSenderId: "994823370862",
+        appId: "1:994823370862:web:75234437dadb6b0dc24e7f"
+        };
+
+      // Initialize Firebase
+      const app = initializeApp(firebaseConfig);
+      const auth = getAuth(app);
+      const db = getFirestore(app);
+
+      // Make Firebase functions available globally
+      window.firebaseAuth = {
+        signInAnonymously: () => signInAnonymously(auth),
+        onAuthStateChanged: (callback) => onAuthStateChanged(auth, callback),
+        getCurrentUser: () => auth.currentUser,
+        signOut: () => auth.signOut()
+      };
+
+      window.firestore = {
+        db: db,
+        collection: collection,
+        doc: doc,
+        setDoc: setDoc,
+        getDoc: getDoc,
+        onSnapshot: onSnapshot,
+        query: query,
+        where: where,
+        updateDoc: updateDoc,
+        deleteDoc: deleteDoc,
+        addDoc: addDoc,
+        serverTimestamp: serverTimestamp
+      };
+
+      console.log('Firebase initialized', window.firebaseAuth);
+      
+      // Mark Firebase as ready
+      window.firebaseReady = true;
+    </script>
 </head>
 <body>
     <div id="app"></div>
-    <!-- <script src="_build/default/ui/hw6_othello_static_ui.bc.js"></script> -->
-    <!-- <script src="_build/default/ui/othello_ui.bc.js"></script> -->
-    <script src="generated_js/othello_ui.bc.js"></script> 
+    <!-- Load OCaml code AFTER Firebase is initialized -->
+    <script defer src="othello_ui.bc.js"></script> 
 </body>
 </html>
