@@ -1,6 +1,7 @@
 (executables
  (modes js)
  (names othello_ui)
- (libraries bonsai.web core virtual_dom othello_logic_library)
+ (modules othello_ui firebase_bindings game_sync)
+ (libraries bonsai.web core virtual_dom othello_logic_library js_of_ocaml)
  (preprocess
   (pps ppx_jane bonsai.ppx_bonsai)))

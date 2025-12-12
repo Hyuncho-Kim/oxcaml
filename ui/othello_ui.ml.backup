@@ -5,10 +5,17 @@ open Hw4_alpha_beta_search
 open Virtual_dom
 open! Bonsai.Let_syntax
 
+(* Online game mode *)
+type online_mode =
+  | QuickMatch
+  | FriendMatch of { friend_id : string }
+[@@deriving sexp, equal]
+
+(* Updated game mode to include online *)
 type game_mode =
   | PassAndPlay
   | VsComputer of { human_player : Player_kind.t }
-  | Online of { game_id : string; player_color : Player_kind.t }
+  | Online of { online_mode : online_mode; game_id : string option; player_color : Player_kind.t option }
 [@@deriving sexp, equal]
 
 (* Authentication state *)
@@ -16,6 +23,13 @@ type auth_state =
   | NotAuthenticated
   | Authenticating
   | Authenticated of { user_id : string }
+[@@deriving sexp, equal]
+
+(* Matchmaking state *)
+type matchmaking_state =
+  | NotSearching
+  | Searching
+  | MatchFound of { game_id : string; player_color : Player_kind.t }
 [@@deriving sexp, equal]
 
 (* Move stage - for animating the placement and flipping separately *)
@@ -27,17 +41,8 @@ type move_stage =
 (* Game screen type *)
 type screen =
   | LandingPage
-  | CreateGameScreen of { game_id : string }
-  | JoinGameScreen
+  | MatchmakingScreen
   | GameScreen of game_mode
-[@@deriving sexp, equal]
-(* Type for mode selection *)
-type mode_selection =
-  | LocalPassAndPlay
-  | LocalVsComputerBlack
-  | LocalVsComputerWhite  
-  | OnlineCreateGame
-  | OnlineJoinGame
 [@@deriving sexp, equal]
 
 let lookup_cell (game_state : Game_state.t) ~row ~column =
@@ -71,19 +76,14 @@ let othello_board ~(game_state : Game_state.t) ~set_game_state ~game_mode ~previ
     | DiskPlaced _ -> true
   in
   
-  (* Check if it's AI's turn OR if it's online mode and not our turn *)
-  let is_interactive =
+  (* Check if it's AI's turn *)
+  let is_ai_turn =
     match game_mode with
-    | PassAndPlay -> not is_game_over && not is_animating
-    | Online { player_color; _ } ->
-      not is_game_over && not is_animating &&
-      (match game_state.decision with
-       | In_progress { whose_turn } -> Player_kind.equal whose_turn player_color
-       | Game_over _ -> false)
+    | PassAndPlay -> false
+    | Online _ -> false 
     | VsComputer { human_player } ->
-      not is_game_over && not is_animating &&
       (match game_state.decision with
-       | In_progress { whose_turn } -> Player_kind.equal whose_turn human_player
+       | In_progress { whose_turn } -> not (Player_kind.equal whose_turn human_player)
        | Game_over _ -> false)
   in
   
@@ -114,8 +114,8 @@ let othello_board ~(game_state : Game_state.t) ~set_game_state ~game_mode ~previ
           | Player_kind.White -> "disk white"
         in
         [], [ Vdom.Node.div ~attrs:(Vdom.Attr.class_ disk_class :: disk_attrs) [] ]
-      | None when not is_interactive ->
-        (* Not our turn or game over *)
+      | None when is_game_over || is_ai_turn || is_animating ->
+        (* Game is over, AI's turn, or currently animating - not clickable *)
         [], []
       | None ->
         (* Empty cell - check if it's a legal move *)
@@ -127,48 +127,40 @@ let othello_board ~(game_state : Game_state.t) ~set_game_state ~game_mode ~previ
          if is_legal
          then (
            (* Legal move - make it clickable *)
-            let click_attr =
-              Vdom.Attr.(
-                class_ "box-shadow-with-hover-effect"
-                @ on_click (fun _ ->
-                  match Game_state.make_move game_state { row; column } with
-                  | Error _ -> Ui_effect.Ignore
-                  | Ok final_state ->
-                    (* Create intermediate state and schedule the flip *)
-                    (match create_intermediate_state game_state row column with
+           let click_attr =
+             Vdom.Attr.(
+               class_ "box-shadow-with-hover-effect"
+               @ on_click (fun _ ->
+                 match Game_state.make_move game_state { row; column } with
+                 | Error _ -> Ui_effect.Ignore
+                 | Ok final_state ->
+                   (* Create intermediate state and schedule the flip *)
+                   (match create_intermediate_state game_state row column with
                     | None -> Ui_effect.Ignore
                     | Some intermediate_state ->
-                      (* If online mode, sync to Firestore after the animation *)
-                      let sync_after_animation () =
-                        match game_mode with
-                        | Online { game_id; _ } ->
-                          Game_sync.sync_game_state game_id final_state
-                        | _ -> ()
-                      in
                       Ui_effect.Many
                         [ set_game_state intermediate_state
                         ; set_move_stage (DiskPlaced { intermediate_state; final_state })
                         ; Ui_effect.of_sync_fun
                             (fun () ->
-                                (* After 0.4 second, complete the move *)
-                                let (_ : float) =
-                                  Js_of_ocaml.Js.Unsafe.fun_call
-                                    (Js_of_ocaml.Js.Unsafe.js_expr "setTimeout")
-                                    [| Js_of_ocaml.Js.Unsafe.inject
+                               (* After 0.4 second, complete the move *)
+                               let (_ : float) =
+                                 Js_of_ocaml.Js.Unsafe.fun_call
+                                   (Js_of_ocaml.Js.Unsafe.js_expr "setTimeout")
+                                   [| Js_of_ocaml.Js.Unsafe.inject
                                         (Js_of_ocaml.Js.wrap_callback (fun () ->
-                                            Ui_effect.Expert.handle
-                                              (Ui_effect.Many
+                                           Ui_effect.Expert.handle
+                                             (Ui_effect.Many
                                                 [ set_game_state final_state
                                                 ; set_move_stage NotMoving
-                                                ]);
-                                            sync_after_animation ()))
-                                    ; Js_of_ocaml.Js.Unsafe.inject 400
-                                    |]
-                                in
-                                ())
+                                                ])))
+                                   ; Js_of_ocaml.Js.Unsafe.inject 400
+                                   |]
+                               in
+                               ())
                             ()
                         ])))
-            in
+           in
            [ click_attr ], [])
          else [], [])
     in
@@ -205,10 +197,7 @@ let render_game_info (game_state : Game_state.t) ~game_mode =
       let player_str = Player_kind.to_string whose_turn in
       (match game_mode with
        | PassAndPlay -> sprintf "%s's turn" player_str
-       | Online { player_color; _ } ->
-         if Player_kind.equal whose_turn player_color
-         then sprintf "Your turn (%s)" (Player_kind.to_string player_color)
-         else "Opponent's turn..."
+       | Online _ -> sprintf "%s's turn" player_str
        | VsComputer { human_player } ->
          if Player_kind.equal whose_turn human_player
          then "Your turn"
@@ -216,67 +205,54 @@ let render_game_info (game_state : Game_state.t) ~game_mode =
     | Game_over { winner = Some player } ->
       (match game_mode with
        | PassAndPlay -> sprintf "Game Over - %s Wins!" (Player_kind.to_string player)
-       | Online { player_color; _ } ->
-         if Player_kind.equal player player_color
-         then "You Win! 🎉"
-         else "Opponent Wins!"
+       | Online _ -> sprintf "Game Over - %s Wins!" (Player_kind.to_string player)
        | VsComputer { human_player } ->
          if Player_kind.equal player human_player
          then "You Win!"
          else "AI Wins!")
     | Game_over { winner = None } -> "Game Over - Draw!"
   in
-  
-  (* Add game ID for online games *)
-  let game_id_info = match game_mode with
-    | Online { game_id; _ } ->
-      [ Vdom.Node.div
-          ~attrs:[ Vdom.Attr.class_ "game-id-display" ]
-          [ Vdom.Node.text (sprintf "Game ID: %s" game_id) ]
-      ]
-    | _ -> []
-  in
-  
   Vdom.Node.div
     ~attrs:[ Vdom.Attr.class_ "game-info" ]
-    ([ Vdom.Node.div
+    [ Vdom.Node.div
         ~attrs:[ Vdom.Attr.class_ "state-label" ]
         [ Vdom.Node.text status_text ]
     ; Vdom.Node.div
         ~attrs:[ Vdom.Attr.class_ "score" ]
         [ Vdom.Node.text (sprintf "Black: %d | White: %d" black_score white_score) ]
-    ] @ game_id_info)
+    ]
 ;;
 
 (* Render landing page with mode selection *)
-let render_landing_page ~on_select_mode ~auth_state ~on_sign_in =  Vdom.Node.div
+let render_landing_page ~on_select_mode ~auth_state ~on_sign_in =
+  Vdom.Node.div
     ~attrs:[ Vdom.Attr.class_ "landing-page" ]
     [ Vdom.Node.h1
         ~attrs:[ Vdom.Attr.class_ "landing-title" ]
         [ Vdom.Node.text "Othello" ]
     ; (match auth_state with
-        | NotAuthenticated ->
-          Vdom.Node.div
-            ~attrs:[ Vdom.Attr.class_ "auth-section" ]
-            [ Vdom.Node.p ~attrs:[] [ Vdom.Node.text "Sign in to play online" ]
-            ; Vdom.Node.button
-                ~attrs:
-                  [ Vdom.Attr.on_click (fun _ -> on_sign_in)
-                  ; Vdom.Attr.class_ "auth-button"
-                  ]
-                [ Vdom.Node.text "Sign In" ]
-            ]
-        | Authenticating ->
-          Vdom.Node.div
-            ~attrs:[ Vdom.Attr.class_ "auth-section" ]
-            [ Vdom.Node.p ~attrs:[] [ Vdom.Node.text "Signing in..." ] ]
-        | Authenticated { user_id } ->
-          Vdom.Node.div
-            ~attrs:[ Vdom.Attr.class_ "auth-section" ]
-            [ Vdom.Node.p
-                ~attrs:[ Vdom.Attr.class_ "user-id" ]
-                [ Vdom.Node.text (sprintf "Signed in as: %s" (String.prefix user_id 8)) ]
-            ])
+       | NotAuthenticated ->
+         Vdom.Node.div
+           ~attrs:[ Vdom.Attr.class_ "auth-section" ]
+           [ Vdom.Node.p ~attrs:[] [ Vdom.Node.text "Sign in to play online" ]
+           ; Vdom.Node.button
+               ~attrs:
+                 [ Vdom.Attr.on_click (fun _ -> on_sign_in)
+                 ; Vdom.Attr.class_ "auth-button"
+                 ]
+               [ Vdom.Node.text "Sign In Anonymously" ]
+           ]
+       | Authenticating ->
+         Vdom.Node.div
+           ~attrs:[ Vdom.Attr.class_ "auth-section" ]
+           [ Vdom.Node.p ~attrs:[] [ Vdom.Node.text "Signing in..." ] ]
+       | Authenticated { user_id } ->
+         Vdom.Node.div
+           ~attrs:[ Vdom.Attr.class_ "auth-section" ]
+           [ Vdom.Node.p
+               ~attrs:[ Vdom.Attr.class_ "user-id" ]
+               [ Vdom.Node.text (sprintf "Signed in as: %s" (String.prefix user_id 8)) ]
+           ])
     ; Vdom.Node.div
         ~attrs:[ Vdom.Attr.class_ "landing-buttons" ]
         ((match auth_state with
@@ -284,34 +260,36 @@ let render_landing_page ~on_select_mode ~auth_state ~on_sign_in =  Vdom.Node.div
             [ Vdom.Node.h3 ~attrs:[] [ Vdom.Node.text "Online Play" ]
             ; Vdom.Node.button
                 ~attrs:
-                  [ Vdom.Attr.on_click (fun _ -> on_select_mode OnlineCreateGame)
+                  [ Vdom.Attr.on_click (fun _ -> 
+                      on_select_mode (Online { online_mode = QuickMatch; game_id = None; player_color = None }))
                   ; Vdom.Attr.class_ "landing-button online-button"
                   ]
-                [ Vdom.Node.text "Create Game" ]
+                [ Vdom.Node.text "Quick Match" ]
             ; Vdom.Node.button
                 ~attrs:
-                  [ Vdom.Attr.on_click (fun _ -> on_select_mode OnlineJoinGame)
+                  [ Vdom.Attr.on_click (fun _ -> 
+                      on_select_mode (Online { online_mode = FriendMatch { friend_id = "" }; game_id = None; player_color = None }))
                   ; Vdom.Attr.class_ "landing-button online-button"
                   ]
-                [ Vdom.Node.text "Join Game" ]
+                [ Vdom.Node.text "Play with Friend" ]
             ]
           | _ -> [])
         @ [ Vdom.Node.h3 ~attrs:[] [ Vdom.Node.text "Local Play" ]
           ; Vdom.Node.button
               ~attrs:
-                [ Vdom.Attr.on_click (fun _ -> on_select_mode LocalPassAndPlay)
+                [ Vdom.Attr.on_click (fun _ -> on_select_mode PassAndPlay)
                 ; Vdom.Attr.class_ "landing-button"
                 ]
               [ Vdom.Node.text "Pass & Play" ]
           ; Vdom.Node.button
               ~attrs:
-                [ Vdom.Attr.on_click (fun _ -> on_select_mode LocalVsComputerBlack)
+                [ Vdom.Attr.on_click (fun _ -> on_select_mode (VsComputer { human_player = Black }))
                 ; Vdom.Attr.class_ "landing-button"
                 ]
               [ Vdom.Node.text "Play as Black vs AI" ]
           ; Vdom.Node.button
               ~attrs:
-                [ Vdom.Attr.on_click (fun _ -> on_select_mode LocalVsComputerWhite)
+                [ Vdom.Attr.on_click (fun _ -> on_select_mode (VsComputer { human_player = White }))
                 ; Vdom.Attr.class_ "landing-button"
                 ]
               [ Vdom.Node.text "Play as White vs AI" ]
@@ -319,112 +297,48 @@ let render_landing_page ~on_select_mode ~auth_state ~on_sign_in =  Vdom.Node.div
     ]
 ;;
 
-
-(* Render create game screen - shows game ID to share *)
-let render_create_game_screen ~game_id ~on_start ~on_back =
+(* Render matchmaking screen *)
+let render_matchmaking_screen ~on_cancel =
   Vdom.Node.div
-    ~attrs:[ Vdom.Attr.class_ "create-game-screen" ]
+    ~attrs:[ Vdom.Attr.class_ "matchmaking-screen" ]
     [ Vdom.Node.h1
-        ~attrs:[ Vdom.Attr.class_ "create-game-title" ]
-        [ Vdom.Node.text "Game Created!" ]
+        ~attrs:[ Vdom.Attr.class_ "matchmaking-title" ]
+        [ Vdom.Node.text "Finding Opponent..." ]
     ; Vdom.Node.div
-        ~attrs:[ Vdom.Attr.class_ "game-id-box" ]
-        [ Vdom.Node.p ~attrs:[] [ Vdom.Node.text "Share this Game ID with your friend:" ]
-        ; Vdom.Node.div
-            ~attrs:[ Vdom.Attr.class_ "game-id-code" ]
-            [ Vdom.Node.text game_id ]
-        ; Vdom.Node.p 
-            ~attrs:[ Vdom.Attr.class_ "game-id-instruction" ]
-            [ Vdom.Node.text "They can join by clicking 'Join Game' and entering this ID" ]
-        ]
-    ; Vdom.Node.div
-        ~attrs:[ Vdom.Attr.class_ "button-row" ]
-        [ Vdom.Node.button
-            ~attrs:
-              [ Vdom.Attr.on_click (fun _ -> on_start)
-              ; Vdom.Attr.class_ "landing-button online-button"
-              ]
-            [ Vdom.Node.text "Start Game" ]
-        ; Vdom.Node.button
-            ~attrs:
-              [ Vdom.Attr.on_click (fun _ -> on_back)
-              ; Vdom.Attr.class_ "landing-button"
-              ]
-            [ Vdom.Node.text "← Back" ]
-        ]
-    ]
-;;
-
-(* Render join game screen - input for game ID *)
-let render_join_game_screen ~on_join ~on_back =
-  Vdom.Node.div
-    ~attrs:[ Vdom.Attr.class_ "join-game-screen" ]
-    [ Vdom.Node.h1
-        ~attrs:[ Vdom.Attr.class_ "join-game-title" ]
-        [ Vdom.Node.text "Join Game" ]
-    ; Vdom.Node.div
-        ~attrs:[ Vdom.Attr.class_ "join-game-form" ]
-        [ Vdom.Node.p ~attrs:[] [ Vdom.Node.text "Enter the Game ID your friend shared:" ]
-        ; Vdom.Node.input
-            ~attrs:
-              [ Vdom.Attr.type_ "text"
-              ; Vdom.Attr.id "game-id-input"
-              ; Vdom.Attr.class_ "game-id-input"
-              ; Vdom.Attr.placeholder "Enter Game ID"
-              ]
-            ()
-        ]
-    ; Vdom.Node.div
-        ~attrs:[ Vdom.Attr.class_ "button-row" ]
-        [ Vdom.Node.button
-            ~attrs:
-              [ Vdom.Attr.on_click (fun _ -> 
-                  let input = Js_of_ocaml.Dom_html.getElementById_coerce "game-id-input" 
-                    Js_of_ocaml.Dom_html.CoerceTo.input in
-                  match input with
-                  | Some elem -> 
-                    let game_id = Js_of_ocaml.Js.to_string (Js_of_ocaml.Js.Unsafe.get elem (Js_of_ocaml.Js.string "value")) in
-                    if String.is_empty (String.strip game_id) 
-                    then Ui_effect.Ignore
-                    else on_join game_id
-                  | None -> Ui_effect.Ignore)
-              ; Vdom.Attr.class_ "landing-button online-button"
-              ]
-            [ Vdom.Node.text "Join Game" ]
-        ; Vdom.Node.button
-            ~attrs:
-              [ Vdom.Attr.on_click (fun _ -> on_back)
-              ; Vdom.Attr.class_ "landing-button"
-              ]
-            [ Vdom.Node.text "← Back" ]
-        ]
+        ~attrs:[ Vdom.Attr.class_ "matchmaking-spinner" ]
+        [ Vdom.Node.text "⟳" ]
+    ; Vdom.Node.p
+        ~attrs:[ Vdom.Attr.class_ "matchmaking-text" ]
+        [ Vdom.Node.text "Searching for available players..." ]
+    ; Vdom.Node.button
+        ~attrs:
+          [ Vdom.Attr.on_click (fun _ -> on_cancel)
+          ; Vdom.Attr.class_ "game-button"
+          ]
+        [ Vdom.Node.text "Cancel" ]
     ]
 ;;
 
 (* Render game buttons (back and new game) *)
-let render_game_buttons ~on_back ~on_new_game ~game_mode =
-  let show_new_game = match game_mode with
-    | Online _ -> false (* Don't show new game for online matches *)
-    | _ -> true
-  in
+let render_game_buttons ~on_back ~on_new_game =
   Vdom.Node.div
     ~attrs:[ Vdom.Attr.class_ "button-container" ]
-    ([ Vdom.Node.button
+    [ Vdom.Node.button
         ~attrs:
           [ Vdom.Attr.on_click (fun _ -> on_back)
           ; Vdom.Attr.class_ "game-button"
           ]
         [ Vdom.Node.text "← Back" ]
-    ] @ (if show_new_game then
-      [ Vdom.Node.button
-          ~attrs:
-            [ Vdom.Attr.on_click (fun _ -> on_new_game)
-            ; Vdom.Attr.class_ "game-button"
-            ]
-          [ Vdom.Node.text "New Game" ]
-      ]
-    else []))
+    ; Vdom.Node.button
+        ~attrs:
+          [ Vdom.Attr.on_click (fun _ -> on_new_game)
+          ; Vdom.Attr.class_ "game-button"
+          ]
+        [ Vdom.Node.text "New Game" ]
+    ]
 ;;
+
+
 
 (* Main app component *)
 let app =
@@ -462,6 +376,14 @@ let app =
         type t = auth_state [@@deriving sexp, equal]
       end)
   in
+
+  (* Matchmaking state *)
+  (*let%sub matchmaking_state, set_matchmaking_state =
+    Bonsai.state ~default_model:NotSearching (
+      module struct
+        type t = matchmaking_state [@@deriving sexp, equal]
+      end)
+  in*)
   
   (* AI move effect - triggers when it's AI's turn with delays *)
   let%sub ai_has_moved, set_ai_has_moved =
@@ -491,8 +413,7 @@ let app =
       and set_ai_is_moving = set_ai_is_moving in
       match screen with
       | LandingPage -> Ui_effect.Ignore
-      | CreateGameScreen _ -> Ui_effect.Ignore
-      | JoinGameScreen -> Ui_effect.Ignore
+      | MatchmakingScreen -> Ui_effect.Ignore  (* Add this line *)
       | GameScreen game_mode ->
         (match game_mode, move_stage with
         | PassAndPlay, _ -> Ui_effect.Ignore
@@ -602,124 +523,79 @@ let app =
   in
   
   match screen with
-    | LandingPage ->
-      render_landing_page 
-        ~on_select_mode:(fun mode ->
-          match mode with
-          | OnlineCreateGame ->
-            (* Create a new game *)
-            Ui_effect.of_sync_fun
-              (fun () ->
-                let game_state = initial_state in
-                let game_data = Game_sync.game_state_to_js game_state in
-                let games_collection = Firebase_bindings.Firestore.collection "games" in
-                Firebase_bindings.Firestore.add_doc games_collection game_data (fun game_id ->
-                  Ui_effect.Expert.handle (set_screen (CreateGameScreen { game_id }))
-                )
-              )
-              ()
-          | OnlineJoinGame ->
-            set_screen JoinGameScreen
-          | LocalPassAndPlay ->
-            Ui_effect.Many
-              [ set_game_state initial_state
+  | LandingPage ->
+    render_landing_page 
+      ~on_select_mode:(fun mode ->
+        match mode with
+        | Online { online_mode = QuickMatch; _ } ->
+          (* Start quick match - go to matchmaking screen *)
+          Ui_effect.Many
+            [ set_screen MatchmakingScreen
+            ; (match auth_state with
+              | Authenticated { user_id } ->
+                Ui_effect.of_sync_fun
+                  (fun () ->
+                      Matchmaking.join_queue user_id (fun game_id_opt ->
+                        match game_id_opt with
+                        | Some game_id ->
+                          (* Match found! *)
+                          Ui_effect.Expert.handle
+                            (set_screen (GameScreen (Online { 
+                              online_mode = QuickMatch; 
+                              game_id = Some game_id; 
+                              player_color = Some Black (* We'll determine this from Firestore later *)
+                            })))
+                        | None ->
+                          (* Added to queue, waiting... *)
+                          ()
+                      ))
+                  ()
+              | _ -> Ui_effect.Ignore)
+            ]
+        | _ ->
+          (* Local modes - work as before *)
+          Ui_effect.Many
+            [ set_game_state initial_state
+            ; set_previous_state None
+            ; set_move_stage NotMoving
+            ; set_screen (GameScreen mode)
+            ])
+      ~auth_state
+      ~on_sign_in:handle_sign_in
+  | MatchmakingScreen ->
+    render_matchmaking_screen
+      ~on_cancel:(Ui_effect.Many
+        [ set_screen LandingPage
+        ; (match auth_state with
+          | Authenticated { user_id } ->
+            Ui_effect.of_sync_fun (fun () -> Matchmaking.leave_queue user_id) ()
+          | _ -> Ui_effect.Ignore)
+        ])
+  | GameScreen game_mode ->
+    Vdom.Node.div
+      ~attrs:[ Vdom.Attr.class_ "container game-container" ]
+      [ render_game_info game_state ~game_mode
+      ; othello_board
+          ~game_state
+          ~set_game_state:update_game_state
+          ~game_mode
+          ~previous_state
+          ~move_stage
+          ~set_move_stage
+      ; render_game_buttons
+          ~on_back:
+            (Ui_effect.Many
+              [ set_screen LandingPage
               ; set_previous_state None
               ; set_move_stage NotMoving
-              ; set_screen (GameScreen PassAndPlay)
-              ]
-          | LocalVsComputerBlack ->
-            Ui_effect.Many
-              [ set_game_state initial_state
-              ; set_previous_state None
-              ; set_move_stage NotMoving
-              ; set_screen (GameScreen (VsComputer { human_player = Black }))
-              ]
-          | LocalVsComputerWhite ->
-            Ui_effect.Many
-              [ set_game_state initial_state
-              ; set_previous_state None
-              ; set_move_stage NotMoving
-              ; set_screen (GameScreen (VsComputer { human_player = White }))
               ])
-        ~auth_state
-        ~on_sign_in:handle_sign_in
-    | CreateGameScreen { game_id } ->
-      render_create_game_screen
-        ~game_id
-        ~on_back:(set_screen LandingPage)
-        ~on_start:
-          (Ui_effect.of_sync_fun
-            (fun () ->
-              (* Set up listener for game state *)
-              let _unsubscribe = Game_sync.listen_to_game game_id (fun updated_state ->
-                Ui_effect.Expert.handle (set_game_state updated_state)
-              ) in
-              (* Navigate to game screen as Black (game creator) *)
-              Ui_effect.Expert.handle
-                (set_screen (GameScreen (Online { 
-                  game_id; 
-                  player_color = Black
-                })))
-            )
-            ())
-    | JoinGameScreen ->
-      render_join_game_screen
-        ~on_join:(fun game_id ->
-          Ui_effect.of_sync_fun
-            (fun () ->
-              (* First check if the game exists *)
-              let games_collection = Firebase_bindings.Firestore.collection "games" in
-              let game_doc = Firebase_bindings.Firestore.doc games_collection game_id in
-              Firebase_bindings.Firestore.get_doc game_doc (fun doc_opt ->
-                Js_of_ocaml.Js.Opt.case doc_opt
-                  (fun () -> 
-                    (* Game doesn't exist - show alert *)
-                    let _ = Js_of_ocaml.Js.Unsafe.fun_call
-                      (Js_of_ocaml.Js.Unsafe.js_expr "alert")
-                      [| Js_of_ocaml.Js.Unsafe.inject (Js_of_ocaml.Js.string "Game not found! Please check the Game ID.") |]
-                    in
-                    ())
-                  (fun _doc ->
-                    (* Game exists - join it *)
-                    let _unsubscribe = Game_sync.listen_to_game game_id (fun updated_state ->
-                      Ui_effect.Expert.handle (set_game_state updated_state)
-                    ) in
-                    (* Navigate to game screen as White (joiner) *)
-                    Ui_effect.Expert.handle
-                      (set_screen (GameScreen (Online { 
-                        game_id; 
-                        player_color = White
-                      }))))
-              )
-            )
-            ())
-        ~on_back:(set_screen LandingPage)
-    | GameScreen game_mode ->
-      Vdom.Node.div
-        ~attrs:[ Vdom.Attr.class_ "container game-container" ]
-        [ render_game_info game_state ~game_mode
-        ; othello_board
-            ~game_state
-            ~set_game_state:update_game_state
-            ~game_mode
-            ~previous_state
-            ~move_stage
-            ~set_move_stage
-        ; render_game_buttons
-            ~game_mode
-            ~on_back:
-              (Ui_effect.Many
-                [ set_screen LandingPage
-                ; set_previous_state None
-                ; set_move_stage NotMoving
-                ])
-            ~on_new_game:
-              (Ui_effect.Many
-                [ set_game_state initial_state
-                ; set_previous_state None
-                ; set_move_stage NotMoving
-                ])
-        ]
-  ;;
+          ~on_new_game:
+            (Ui_effect.Many
+              [ set_game_state initial_state
+              ; set_previous_state None
+              ; set_move_stage NotMoving
+              ])
+      ]
+;;
 
 let () = Bonsai_web.Start.start app

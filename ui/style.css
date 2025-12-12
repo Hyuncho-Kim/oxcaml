@@ -1,15 +1,4 @@
-/*
-We want to have the game div in the middle of the screen.
 
-height&width 100vh makes the body take the full viewport.
-[margin: 0] and [padding: 0]removes default margins&paddings.
-Flexbox centers it both horizontally and vertically
-
-It is possible to use instead:
-[display: grid; place-items: center;]
-The flexbox approach is probably more widely supported,
-while the Grid approach with place-items: center is more concise.
-*/
 body {
   background-color: rgb(34, 139, 34);
   margin: 0;
